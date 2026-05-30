@@ -446,8 +446,27 @@ function horsesFromResult(tableHtml) {
 }
 
 /**
- * 単勝実オッズをJSONP APIで取得（最も信頼性が高い方法）
- * 戻り値: { 馬番(int): オッズ(float), ... }
+ * 単勝オッズをSP APIで取得 { 馬番(int): オッズ(float) }
+ * SP APIはリアルタイム性が高く、公開直後から取得できる
+ */
+async function getWinOddsFromSpApi(raceId) {
+  const url = `https://race.sp.netkeiba.com/?pid=api_get_jra_odds&race_id=${raceId}&type=1&action=init`;
+  try {
+    const raw = await proxyFetch(url);
+    const data = JSON.parse(raw);
+    const rawOdds = data?.data?.odds?.["1"] || {};
+    const result = {};
+    for (const [k, v] of Object.entries(rawOdds)) {
+      const val = parseFloat(String(v?.[0] || "").replace(",", ""));
+      if (val >= 1.0) result[parseInt(k)] = val;
+    }
+    return result;
+  } catch (_) { return {}; }
+}
+
+/**
+ * 単勝オッズをJSONP APIで取得 { 馬番(int): オッズ(float) }
+ * SP APIが空の場合のフォールバック
  */
 async function fetchWinOdds(raceId) {
   const ODDS_API_BASE = "https://race.netkeiba.com/api/api_get_jra_odds.html";
@@ -481,7 +500,7 @@ async function horsesFromShutuba(raceId) {
   let m;
   while ((m = rowRe.exec(tableHtml)) !== null) {
     const row = m[1];
-    // チェックボックスの name 属性が最も確実な馬番ソース
+    // チェックボックスの name 属性 = 馬番（最も確実なソース）
     const cbM = row.match(/class="HorseCheck_Select"[^>]+name="(\d+)"/);
     const horseNum = cbM ? parseInt(cbM[1]) : null;
     if (!horseNum) continue;
@@ -493,8 +512,15 @@ async function horsesFromShutuba(raceId) {
   if (!horses.length) return [];
 
   await sleep(300);
-  // JSONP APIで単勝オッズを取得（最も信頼性が高い）
-  const oddsMap = await fetchWinOdds(raceId);
+
+  // SP API を優先（リアルタイム性が高い）
+  let oddsMap = await getWinOddsFromSpApi(raceId);
+
+  // SP API が空の場合は JSONP API にフォールバック
+  if (Object.keys(oddsMap).length === 0) {
+    await sleep(200);
+    oddsMap = await fetchWinOdds(raceId);
+  }
 
   horses.sort((a, b) => a.number - b.number);
   return horses.map(h => ({
