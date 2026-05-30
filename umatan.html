@@ -544,23 +544,24 @@ async function fetchUmatanOdds(raceId) {
   const ODDS_API_BASE = "https://race.netkeiba.com/api/api_get_jra_odds.html";
   const url = `${ODDS_API_BASE}?pid=api_get_jra_odds&input=UTF-8&output=jsonp` +
               `&race_id=${raceId}&type=6&action=init&sort=odds&compress=0&callback=jQuery`;
-  const text = await proxyFetch(url);
-  const mj = text.match(/^[^(]+\(([\s\S]+)\)\s*;?\s*$/);
-  if (!mj) return {};
-  let data;
-  try { data = JSON.parse(mj[1]); } catch (_) { return {}; }
-  if (data.status !== "result") return {};
-  const raw = data?.data?.odds?.["6"] || {};
-  const result = {};
-  for (const [ck, vals] of Object.entries(raw)) {
-    const v = parseFloat(String(vals?.[0] || "").replace(",", ""));
-    if (isNaN(v) || v < 1.0) continue;
-    // comboKey "0102" → "1→2"
-    const a = parseInt(ck.slice(0, 2));
-    const b = parseInt(ck.slice(2, 4));
-    result[`${a}→${b}`] = v;
-  }
-  return result;
+  try {
+    const text = await proxyFetch(url);
+    const mj = text.match(/^[^(]+\(([\s\S]+)\)\s*;?\s*$/);
+    if (!mj) return {};
+    let data;
+    try { data = JSON.parse(mj[1]); } catch (_) { return {}; }
+    // statusに関わらずデータがあれば取得（発走直後はstatusが"result"以外になる場合がある）
+    const raw = data?.data?.odds?.["6"] || {};
+    const result = {};
+    for (const [ck, vals] of Object.entries(raw)) {
+      const v = parseFloat(String(vals?.[0] || "").replace(",", ""));
+      if (isNaN(v) || v < 1.0) continue;
+      const a = parseInt(ck.slice(0, 2));
+      const b = parseInt(ck.slice(2, 4));
+      result[`${a}→${b}`] = v;
+    }
+    return result;
+  } catch (_) { return {}; }
 }
 
 // ================================================================
