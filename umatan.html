@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<title>競馬EV</title>
+<title>競馬EV - 馬単特化</title>
 <style>
 /* === RESET & BASE === */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -28,14 +28,23 @@ body{
   transition:background .15s;white-space:nowrap;
 }
 .kb-nav a:hover{background:rgba(255,255,255,.1);color:#fff;}
-.kb-nav a.active{background:#0D47A1;color:#fff;}
+.kb-nav a.active{background:#1565C0;color:#fff;}
 /* === HEADER === */
 .kb-hdr{
-  background:#0D47A1;color:#fff;
+  background:#1565C0;color:#fff;
   padding:10px 14px;font-size:15px;font-weight:bold;
   display:flex;justify-content:space-between;align-items:center;
 }
 .kb-hdr .sub{font-size:12px;color:#90CAF9;}
+/* === FORMULA NOTE === */
+.formula-note{
+  background:#E8F5E9;border-left:4px solid #388E3C;
+  padding:8px 14px;font-size:12px;color:#1B5E20;line-height:1.7;
+}
+.formula-note code{
+  background:#C8E6C9;padding:1px 5px;
+  border-radius:3px;font-family:monospace;font-size:12px;
+}
 /* === INPUT ROW === */
 .input-row{
   background:#fff;padding:10px 14px;
@@ -77,7 +86,7 @@ body{
   vertical-align:middle;margin-right:4px;
 }
 /* === MAIN LAYOUT === */
-.main-layout{display:flex;align-items:flex-start;min-height:calc(100vh - 96px);}
+.main-layout{display:flex;align-items:flex-start;min-height:calc(100vh - 130px);}
 /* === SIDEBAR === */
 #sidebar{
   width:230px;min-width:230px;background:#fff;
@@ -87,8 +96,7 @@ body{
 #sidebar summary{
   font-size:13px;font-weight:bold;color:#1565C0;
   border-bottom:1px solid #E3F2FD;padding-bottom:3px;
-  margin:6px 0 4px 0;cursor:pointer;
-  list-style:none;user-select:none;
+  margin:6px 0 4px 0;cursor:pointer;list-style:none;user-select:none;
 }
 #sidebar summary::-webkit-details-marker{display:none;}
 #sidebar details>div{padding:0 2px;}
@@ -100,10 +108,7 @@ body{
 .kb-lbl{font-size:12px;color:#546E7A;display:block;margin:6px 0 2px 0;}
 .slider-row{display:flex;align-items:center;gap:6px;}
 .slider-row input[type="range"]{flex:1;min-width:0;accent-color:#1565C0;height:20px;}
-.slider-val{font-size:13px;font-weight:bold;color:#1565C0;min-width:32px;text-align:right;}
-.cb-row{display:flex;flex-wrap:wrap;gap:2px 8px;}
-.cb-item{display:flex;align-items:center;gap:5px;font-size:13px;min-height:32px;cursor:pointer;}
-.cb-item input{width:16px;height:16px;cursor:pointer;}
+.slider-val{font-size:13px;font-weight:bold;color:#1565C0;min-width:36px;text-align:right;}
 .radio-group{display:flex;flex-direction:column;gap:1px;}
 .radio-item{display:flex;align-items:center;gap:6px;font-size:13px;min-height:32px;cursor:pointer;}
 .radio-item input{width:16px;height:16px;cursor:pointer;}
@@ -151,22 +156,12 @@ hr.div{border:none;border-top:1px solid #E0E0E0;margin:8px 0;}
   border:1.5px solid currentColor;border-radius:3px;
   padding:1px 5px;font-weight:bold;line-height:1.4;
 }
+.arr{padding:0 3px;}
 .vbadge{
   display:inline-block;padding:2px 8px;
   border-radius:3px;font-weight:bold;font-size:13px;
 }
 .empty-msg{color:#78909C;padding:20px;font-size:14px;}
-/* === SETUP WARNING === */
-.setup-warn{
-  background:#FFF3E0;border:2px solid #FF9800;
-  border-radius:6px;padding:16px;margin:12px;
-  font-size:14px;line-height:1.7;
-}
-.setup-warn h3{color:#E65100;margin-bottom:8px;}
-.setup-warn code{
-  background:#FFECB3;padding:2px 6px;
-  border-radius:3px;font-family:monospace;font-size:13px;
-}
 /* === MOBILE === */
 @media(max-width:768px){
   .kb-hdr{font-size:14px;padding:8px 12px;}
@@ -190,14 +185,21 @@ hr.div{border:none;border-top:1px solid #E0E0E0;margin:8px 0;}
 
 <!-- ナビタブ -->
 <div class="kb-nav">
-  <a href="index.html" class="active">🏇 全券種</a>
-  <a href="umatan.html">🎯 馬単特化</a>
+  <a href="index.html">🏇 全券種</a>
+  <a href="umatan.html" class="active">🎯 馬単特化</a>
 </div>
 
 <!-- ヘッダー -->
 <div class="kb-hdr">
-  <span>🏇 競馬期待値計算ツール</span>
+  <span>🎯 馬単期待値計算ツール（特化版）</span>
   <span id="statusBar" class="sub">初期状態</span>
+</div>
+
+<!-- 計算式の説明 -->
+<div class="formula-note">
+  計算式: <code>支持率 = 1/単勝オッズ × 0.80</code>
+  <code>的中確率(A→B) = 支持率A × 支持率B ÷ (1 − 支持率A)</code>
+  <code>期待値 = 的中確率 × 実馬単オッズ × 100</code>
 </div>
 
 <!-- 入力行 -->
@@ -231,9 +233,9 @@ hr.div{border:none;border-top:1px solid #E0E0E0;margin:8px 0;}
       <div>
         <span class="kb-lbl">的中率 下限 (%)</span>
         <div class="slider-row">
-          <input type="range" id="hitPctMin" min="0" max="50" step="0.5" value="10"
+          <input type="range" id="hitPctMin" min="0" max="40" step="0.5" value="8"
                  oninput="document.getElementById('hitPctMinVal').textContent=parseFloat(this.value).toFixed(1)">
-          <span class="slider-val" id="hitPctMinVal">10.0</span>
+          <span class="slider-val" id="hitPctMinVal">8.0</span>
         </div>
 
         <span class="kb-lbl">期待値 下限（実オッズ取得後に有効）</span>
@@ -244,21 +246,12 @@ hr.div{border:none;border-top:1px solid #E0E0E0;margin:8px 0;}
         </div>
 
         <hr class="div">
-        <div class="kb-sec">券種</div>
-        <div class="cb-row">
-          <label class="cb-item"><input type="checkbox" id="cb_馬連" checked> 馬連</label>
-          <label class="cb-item"><input type="checkbox" id="cb_馬単" checked> 馬単</label>
-          <label class="cb-item"><input type="checkbox" id="cb_三連複" checked> 三連複</label>
-          <label class="cb-item"><input type="checkbox" id="cb_三連単" checked> 三連単</label>
-        </div>
-
-        <hr class="div">
         <div class="kb-sec">グループ内ソート</div>
         <div class="radio-group">
           <label class="radio-item"><input type="radio" name="sortKey" value="ev_desc" checked> 期待値↓</label>
           <label class="radio-item"><input type="radio" name="sortKey" value="hit_desc"> 的中率↓</label>
           <label class="radio-item"><input type="radio" name="sortKey" value="od_asc"> 理論OD↑</label>
-          <label class="radio-item"><input type="radio" name="sortKey" value="sup_desc"> 支持率↓</label>
+          <label class="radio-item"><input type="radio" name="sortKey" value="supA_desc"> 支持率A↓</label>
         </div>
 
         <hr class="div">
@@ -303,79 +296,134 @@ hr.div{border:none;border-top:1px solid #E0E0E0;margin:8px 0;}
 "use strict";
 
 // ================================================================
-// ★ 設定 — Cloudflare Worker の URL を設定してください
+// ★ 設定
 // ================================================================
 const CONFIG = {
   PROXY: "https://keiba-proxy.yagiyagisansam.workers.dev",
 };
 
 // ================================================================
-// ユーティリティ
+// 定数
 // ================================================================
+const WIN_RR = 0.80;       // 単勝払戻率
+const UMATAN_RR = 0.75;    // 馬単払戻率
+const VENUE_CODE = {
+  "01":"札幌","02":"函館","03":"福島","04":"新潟",
+  "05":"東京","06":"中山","07":"中京","08":"京都",
+  "09":"阪神","10":"小倉",
+};
+const VENUES = ["札幌","函館","福島","新潟","東京","中山","中京","京都","阪神","小倉"];
+const VENUE_BG = {
+  "札幌":"#DDEEFF","函館":"#EDE0FF","福島":"#FFE8CC","新潟":"#FFF5CC",
+  "東京":"#FFD6E8","中山":"#E6F5CC","中京":"#D6F5D6","京都":"#CCF5F5",
+  "阪神":"#F0D6FF","小倉":"#FFD6CC",
+};
+const VENUE_FG = {
+  "札幌":"#0D47A1","函館":"#4A148C","福島":"#E65100","新潟":"#F57F17",
+  "東京":"#880E4F","中山":"#558B2F","中京":"#1B5E20","京都":"#006064",
+  "阪神":"#6A1B9A","小倉":"#BF360C",
+};
+
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+// ================================================================
+// プロキシ fetch
+// ================================================================
 async function proxyFetch(url) {
-  if (!CONFIG.PROXY) throw new Error("CONFIG.PROXY が設定されていません");
   const resp = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(url)}`);
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   return resp.text();
 }
 
 // ================================================================
-// スクレイパー（netkeiba_to_csv.py の JS 移植）
+// ★ 計算エンジン（記事の計算式）
 // ================================================================
-const VENUE_CODE = {
-  "01":"札幌","02":"函館","03":"福島","04":"新潟",
-  "05":"東京","06":"中山","07":"中京","08":"京都",
-  "09":"阪神","10":"小倉",
-};
-const BET_TYPE_NUM = {"馬連":"4","馬単":"6","三連複":"7","三連単":"8"};
-const ODDS_API_BASE = "https://race.netkeiba.com/api/api_get_jra_odds.html";
+/**
+ * 支持率 = 1/単勝オッズ × 0.80
+ * 的中確率(A→B) = 支持率A × 支持率B / (1 − 支持率A)
+ * 理論オッズ = UMATAN_RR / 的中確率
+ * 期待値 = 的中確率 × 実馬単オッズ × 100
+ */
+function calcUmatan(horses) {
+  // 支持率を付与
+  horses.forEach(h => {
+    h.support = (1.0 / h.odds) * WIN_RR;
+  });
 
-/** 指定日の全レース一覧を返す */
+  const entries = [];
+  for (let i = 0; i < horses.length; i++) {
+    const A = horses[i];
+    if (A.support >= 1.0) continue; // 除算エラー防止
+    for (let j = 0; j < horses.length; j++) {
+      if (i === j) continue;
+      const B = horses[j];
+      const prob = A.support * (B.support / (1.0 - A.support));
+      if (prob <= 0 || prob >= 1) continue;
+      entries.push({
+        combo:      `${A.number}→${B.number}`,
+        names:      `${A.name}→${B.name}`,
+        numA:       A.number,
+        numB:       B.number,
+        nameA:      A.name,
+        nameB:      B.name,
+        supportA:   A.support * 100,   // %表示
+        supportB:   B.support * 100,
+        oddsA:      A.odds,
+        oddsB:      B.odds,
+        prob:       prob,
+        hit_pct:    prob * 100,
+        fair_odds:  UMATAN_RR / prob,
+        actual_odds: null,
+        ev100:       null,
+      });
+    }
+  }
+  return entries;
+}
+
+function attachUmatanOdds(entries, oddsMap) {
+  for (const e of entries) {
+    const ao = oddsMap[e.combo];
+    if (ao !== undefined) {
+      e.actual_odds = ao;
+      e.ev100 = Math.round(e.prob * ao * 100);
+    }
+  }
+}
+
+// ================================================================
+// スクレイパー（index.html から共通部分を移植）
+// ================================================================
 async function getRaceList(date) {
   const url = `https://race.sp.netkeiba.com/?pid=race_list&kaisai_date=${date}`;
   const html = await proxyFetch(url);
-
-  // 対象日付のセクションを抽出（複数日付ページ対策）
   const secRe = new RegExp(`data-kaisaidate="${date}"[\\s\\S]+?(?=<div class="RaceListDayWrap"|$)`);
   const secM = html.match(secRe);
   const target = secM ? secM[0] : html;
-
-  // RaceList_SlideBoxItem ごとに分割（会場単位）
   const slideItems = target.split('<div class="RaceList_SlideBoxItem">').slice(1);
-
   const races = [];
   for (const item of slideItems) {
-    // 会場コードを race_id の 5-6 桁目から特定
     const ridM = item.match(/race_id=(\d{12})/);
     const venue = ridM ? (VENUE_CODE[ridM[1].substring(4, 6)] || "?") : "?";
-
-    // 各レースボックスを抽出
     const boxes = item.split('<div class="RaceList_Main_Box">').slice(1);
     for (let box of boxes) {
-      // 閉じタグコメントまでを対象にする
       const closeIdx = box.indexOf('<!-- /');
       if (closeIdx > 0) box = box.substring(0, closeIdx);
-
       const raceRidM = box.match(/(?:race_result&amp;race_id|shutuba\.html\?race_id)=(\d+)/);
       if (!raceRidM) continue;
-
       const rnumM  = box.match(/<div class="Race_Num[^"]*"><span>(\d+R)<\/span>/);
       const rnameM = box.match(/<dt class="Race_Name">\s*([^\n\r<]+)/);
-
       races.push({
         raceId:   raceRidM[1],
-        venue:    venue,
-        raceNo:   rnumM  ? rnumM[1]            : "-",
-        raceName: rnameM ? rnameM[1].trim()     : "-",
+        venue,
+        raceNo:   rnumM  ? rnumM[1]        : "-",
+        raceName: rnameM ? rnameM[1].trim() : "-",
       });
     }
   }
   return races;
 }
 
-/** 実施済みレース（結果ページ）から馬情報を取得 */
 function horsesFromResult(tableHtml) {
   const horses = [];
   const rowRe = /<tr[^>]*>([\s\S]*?)<\/tr>/g;
@@ -383,25 +431,20 @@ function horsesFromResult(tableHtml) {
   while ((m = rowRe.exec(tableHtml)) !== null) {
     const row = m[1];
     if (row.includes("<th") || !/class="Rank"/.test(row)) continue;
-
     const numMatches = [...row.matchAll(/<td class="Num[^"]*">\s*<div>(\d+)<\/div>/g)];
     if (numMatches.length < 2) continue;
     const horseNum = parseInt(numMatches[1][1]);
-
     let nameM = row.match(/class="Horse_Name">[\s\S]*?<a[^>]+title="([^"]+)"/);
     if (!nameM) nameM = row.match(/class="Horse_Name">[\s\S]*?<a[^>]+>([^<]+)</);
     const horseName = nameM ? nameM[1].trim() : "-";
-
     const oddsM = row.match(/<td class="Odds">[\s\S]*?<dt[^>]*>([\d.]+)倍/);
     const odds = oddsM ? oddsM[1] : "";
-
     horses.push({ number: horseNum, name: horseName, odds });
   }
   horses.sort((a, b) => a.number - b.number);
   return horses;
 }
 
-/** SP 単勝オッズ API から {馬番: オッズ文字列} を返す */
 async function getWinOddsFromSpApi(raceId) {
   const url = `https://race.sp.netkeiba.com/?pid=api_get_jra_odds&race_id=${raceId}&type=1&action=init`;
   try {
@@ -417,18 +460,14 @@ async function getWinOddsFromSpApi(raceId) {
   } catch (_) { return {}; }
 }
 
-/** 出馬表ページから馬情報を取得（未実施レース用） */
 async function horsesFromShutuba(raceId) {
   const url = `https://race.sp.netkeiba.com/race/shutuba.html?race_id=${raceId}`;
   const html = await proxyFetch(url);
-
   const tableM = html.match(/<table class="Shutuba_Table">([\s\S]*?)(?=<\/table>)/);
   if (!tableM) return [];
   const tableHtml = tableM[1];
-
   const theadM = tableHtml.match(/<thead>([\s\S]*?)<\/thead>/);
   const wakuConfirmed = !!(theadM && /<th class="Waku">/.test(theadM[1]));
-
   const horses = [];
   const rowRe = /<tr\s+class="HorseList"[^>]*>([\s\S]*?)<\/tr>/g;
   let m;
@@ -436,260 +475,75 @@ async function horsesFromShutuba(raceId) {
     const row = m[1];
     const cbM = row.match(/class="HorseCheck_Select"[^>]+name="(\d+)"/);
     const apiKey = cbM ? parseInt(cbM[1]) : null;
-
     let horseNum = null;
     if (wakuConfirmed) {
       const wakuM = row.match(/<td class="Waku\d+">\s*(\d+)\s*<\/td>/);
       horseNum = wakuM ? parseInt(wakuM[1]) : null;
     }
-
     const nameM = row.match(/class="Horse HorseLink"[^>]*>[\s\S]*?<a[^>]+>\s*([^<]+?)\s*<\/a>/);
     if (!nameM) continue;
-    const horseName = nameM[1].replace(/ /g, "").trim();
-
+    const horseName = nameM[1].replace(/ /g, "").trim();
     horses.push({ number: horseNum, name: horseName, _apiKey: apiKey });
   }
   if (!horses.length) return [];
-
   await sleep(500);
   const oddsMap = await getWinOddsFromSpApi(raceId);
-
   if (wakuConfirmed) {
     horses.sort((a, b) => (a.number ?? 9999) - (b.number ?? 9999));
   } else {
     horses.sort((a, b) => (a._apiKey ?? 9999) - (b._apiKey ?? 9999));
   }
-
   return horses.map(h => {
     const key = wakuConfirmed ? h.number : h._apiKey;
-    return {
-      number: h.number ?? null,
-      name:   h.name,
-      odds:   (key !== null ? oddsMap[key] || "" : ""),
-    };
+    return { number: h.number ?? null, name: h.name, odds: (key !== null ? oddsMap[key] || "" : "") };
   });
 }
 
-/** 馬情報取得（実施済み/未実施を自動判定） */
 async function getRaceHorses(raceId) {
   const url = `https://race.sp.netkeiba.com/?pid=race_result&race_id=${raceId}`;
   const html = await proxyFetch(url);
-
   const tableM = html.match(/id="All_Result_Table"[^>]*>([\s\S]*?)(?=<\/table>)/);
-  if (tableM) {
-    return { horses: horsesFromResult(tableM[1]), source: "result" };
-  }
-
+  if (tableM) return { horses: horsesFromResult(tableM[1]), source: "result" };
   const horses = await horsesFromShutuba(raceId);
-  return horses.length
-    ? { horses, source: "shutuba" }
-    : { horses: [], source: "none" };
+  return horses.length ? { horses, source: "shutuba" } : { horses: [], source: "none" };
 }
 
-/** comboキー（"0102"）→ 買い目文字列（"1-2"）変換 */
-function comboToKey(comboKey, betType) {
-  const nums = [];
-  for (let i = 0; i < comboKey.length; i += 2) nums.push(parseInt(comboKey.slice(i, i + 2)));
-  if (betType === "馬連" && nums.length === 2) {
-    const s = nums.slice().sort((a, b) => a - b); return `${s[0]}-${s[1]}`;
-  }
-  if (betType === "馬単" && nums.length === 2) return `${nums[0]}→${nums[1]}`;
-  if (betType === "三連複" && nums.length === 3) {
-    const s = nums.slice().sort((a, b) => a - b); return `${s[0]}-${s[1]}-${s[2]}`;
-  }
-  if (betType === "三連単" && nums.length === 3) return `${nums[0]}→${nums[1]}→${nums[2]}`;
-  return "";
-}
-
-/** netkeiba JSONP オッズ API から生データを返す */
-async function fetchOddsRaw(raceId, typeNum) {
+/** 馬単実オッズを取得 {"1→2": 5.3, ...} */
+async function fetchUmatanOdds(raceId) {
+  const ODDS_API_BASE = "https://race.netkeiba.com/api/api_get_jra_odds.html";
   const url = `${ODDS_API_BASE}?pid=api_get_jra_odds&input=UTF-8&output=jsonp` +
-              `&race_id=${raceId}&type=${typeNum}&action=init&sort=odds&compress=0&callback=jQuery`;
+              `&race_id=${raceId}&type=6&action=init&sort=odds&compress=0&callback=jQuery`;
   const text = await proxyFetch(url);
-  const m = text.match(/^[^(]+\(([\s\S]+)\)\s*;?\s*$/);
-  if (!m) return {};
+  const mj = text.match(/^[^(]+\(([\s\S]+)\)\s*;?\s*$/);
+  if (!mj) return {};
   let data;
-  try { data = JSON.parse(m[1]); } catch (_) { return {}; }
+  try { data = JSON.parse(mj[1]); } catch (_) { return {}; }
   if (data.status !== "result") return {};
-  return data?.data?.odds?.[typeNum] || {};
-}
-
-/** 単勝実オッズを取得 {馬番: float} */
-async function fetchWinOdds(raceId) {
-  const raw = await fetchOddsRaw(raceId, "1");
+  const raw = data?.data?.odds?.["6"] || {};
   const result = {};
-  for (const [k, vals] of Object.entries(raw)) {
+  for (const [ck, vals] of Object.entries(raw)) {
     const v = parseFloat(String(vals?.[0] || "").replace(",", ""));
-    if (v >= 1.0) result[parseInt(k)] = v;
+    if (isNaN(v) || v < 1.0) continue;
+    // comboKey "0102" → "1→2"
+    const a = parseInt(ck.slice(0, 2));
+    const b = parseInt(ck.slice(2, 4));
+    result[`${a}→${b}`] = v;
   }
   return result;
-}
-
-/** 4券種の実オッズを一括取得 {"馬連": {"1-2": 5.3, ...}, ...} */
-async function fetchOdds(raceId, betTypes = null) {
-  if (!betTypes) betTypes = Object.keys(BET_TYPE_NUM);
-  const allOdds = {};
-  for (const bt of betTypes) {
-    try {
-      const raw = await fetchOddsRaw(raceId, BET_TYPE_NUM[bt]);
-      const dict = {};
-      for (const [ck, vals] of Object.entries(raw)) {
-        const v = parseFloat(String(vals?.[0] || "").replace(",", ""));
-        if (isNaN(v) || v < 1.0) continue;
-        const key = comboToKey(ck, bt);
-        if (key) dict[key] = v;
-      }
-      allOdds[bt] = dict;
-    } catch (_) {
-      allOdds[bt] = {};
-    }
-    await sleep(300);
-  }
-  return allOdds;
-}
-
-// ================================================================
-// エンジン（_nb_engine_v6.py の JS 移植）
-// ================================================================
-const WIN_RR = 0.80;
-const RETURN_RATES = {"馬連":0.775,"馬単":0.750,"三連複":0.750,"三連単":0.725};
-const BET_TYPES = ["馬連","馬単","三連複","三連単"];
-
-function normalize(horses) {
-  const raw = horses.map(h => 1.0 / h.odds);
-  const s = raw.reduce((a, b) => a + b, 0);
-  horses.forEach((h, i) => {
-    h.winProb    = raw[i] / s;
-    h.supportRate = raw[i] * WIN_RR * 100;
-  });
-  return horses;
-}
-
-function harville(probMap, order) {
-  let p = 1.0, rem = 1.0;
-  for (const n of order) {
-    if (rem < 1e-12) return 0.0;
-    p *= probMap[n] / rem;
-    rem -= probMap[n];
-  }
-  return p;
-}
-
-function* combinations(arr, r) {
-  if (r === 1) { for (const x of arr) yield [x]; return; }
-  for (let i = 0; i <= arr.length - r; i++) {
-    for (const rest of combinations(arr.slice(i + 1), r - 1)) yield [arr[i], ...rest];
-  }
-}
-
-function* permutations(arr, r) {
-  if (r === undefined) r = arr.length;
-  if (r === 1) { for (const x of arr) yield [x]; return; }
-  for (let i = 0; i < arr.length; i++) {
-    const rest = [...arr.slice(0, i), ...arr.slice(i + 1)];
-    for (const p of permutations(rest, r - 1)) yield [arr[i], ...p];
-  }
-}
-
-function makeEntry(bt, nums, prob, hMap, ordered) {
-  const sep = ordered ? "→" : "-";
-  const sr = nums.map(n => hMap[n].supportRate);
-  return {
-    type:          bt,
-    combo:         nums.join(sep),
-    names:         nums.map(n => hMap[n].name).join(sep),
-    prob:          prob,
-    hit_pct:       prob * 100,
-    win_rates:     nums.map(n => hMap[n].winProb * 100),
-    fair_odds:     prob > 0 ? RETURN_RATES[bt] / prob : Infinity,
-    support_rates: sr,
-    min_support:   Math.min(...sr),
-    actual_odds:   null,
-    ev100:         null,
-  };
-}
-
-function calcBetType(horses, bt) {
-  const pm = {}, hm = {};
-  horses.forEach(h => { pm[h.number] = h.winProb; hm[h.number] = h; });
-  const nums = horses.map(h => h.number);
-  const out = [];
-  if (bt === "馬連") {
-    for (const [a, b] of combinations(nums, 2)) {
-      out.push(makeEntry(bt, [a, b], harville(pm, [a, b]) + harville(pm, [b, a]), hm, false));
-    }
-  } else if (bt === "馬単") {
-    for (const [a, b] of permutations(nums, 2)) {
-      out.push(makeEntry(bt, [a, b], harville(pm, [a, b]), hm, true));
-    }
-  } else if (bt === "三連複") {
-    for (const c of combinations(nums, 3)) {
-      let p = 0; for (const perm of permutations(c)) p += harville(pm, perm);
-      out.push(makeEntry(bt, c, p, hm, false));
-    }
-  } else if (bt === "三連単") {
-    for (const perm of permutations(nums, 3)) {
-      out.push(makeEntry(bt, perm, harville(pm, perm), hm, true));
-    }
-  }
-  return out;
-}
-
-function calcAll(horses) {
-  const cache = {};
-  for (const bt of BET_TYPES) cache[bt] = calcBetType(horses, bt);
-  return cache;
-}
-
-function recomputeWithWinOdds(horses, cache, winOddsMap) {
-  let updated = 0;
-  for (const h of horses) {
-    if (winOddsMap[h.number] !== undefined) { h.odds = winOddsMap[h.number]; updated++; }
-  }
-  if (!updated) return false;
-  normalize(horses);
-  for (const bt of BET_TYPES) cache[bt] = calcBetType(horses, bt);
-  return true;
-}
-
-function attachActualOdds(cache, allOdds) {
-  for (const [bt, entries] of Object.entries(cache)) {
-    const omap = allOdds[bt] || {};
-    for (const r of entries) {
-      const ao = omap[r.combo];
-      r.actual_odds = ao !== undefined ? ao : null;
-      r.ev100       = ao !== undefined ? Math.round(r.prob * ao * 100) : null;
-    }
-  }
 }
 
 // ================================================================
 // 状態管理
 // ================================================================
 const STATE = {
-  races:     [],   // [{raceId, venue, raceNo, raceName}]
-  results:   [],   // 全行フラット [{kaijoba, race, type, combo, ...}]
+  races:     [],
+  results:   [],
   hasActual: false,
   loading:   false,
 };
 
 // ================================================================
-// UI 定数
-// ================================================================
-const VENUES = ["札幌","函館","福島","新潟","東京","中山","中京","京都","阪神","小倉"];
-const VENUE_BG = {
-  "札幌":"#DDEEFF","函館":"#EDE0FF","福島":"#FFE8CC","新潟":"#FFF5CC",
-  "東京":"#FFD6E8","中山":"#E6F5CC","中京":"#D6F5D6","京都":"#CCF5F5",
-  "阪神":"#F0D6FF","小倉":"#FFD6CC",
-};
-const VENUE_FG = {
-  "札幌":"#0D47A1","函館":"#4A148C","福島":"#E65100","新潟":"#F57F17",
-  "東京":"#880E4F","中山":"#558B2F","中京":"#1B5E20","京都":"#006064",
-  "阪神":"#6A1B9A","小倉":"#BF360C",
-};
-
-// ================================================================
-// UI 関数
+// UI
 // ================================================================
 function setStatus(type, msg) {
   const el = document.getElementById("statusBar");
@@ -698,13 +552,13 @@ function setStatus(type, msg) {
   el.innerHTML = `<span class="${cls}">${spin}${msg}</span>`;
 }
 
-function comboChips(combo, fg) {
-  const hasArr = combo.includes("→");
-  const parts  = hasArr ? combo.split("→") : combo.split("-");
-  const sep    = hasArr
-    ? `<span style="padding:0 3px;color:${fg}">→</span>`
-    : `<span style="padding:0 3px;color:${fg}">-</span>`;
-  return parts.map(p => `<span class="num-chip" style="color:${fg}">${p}</span>`).join(sep);
+function readFiltersObj() {
+  return {
+    hitPctMin: parseFloat(document.getElementById("hitPctMin").value) || 0,
+    evMin:     parseInt(document.getElementById("evMin").value) || 0,
+    sortKey:   document.querySelector('input[name="sortKey"]:checked')?.value || "ev_desc",
+    topN:      parseInt(document.getElementById("topN").value) || 50,
+  };
 }
 
 function renderTable(rows) {
@@ -716,12 +570,17 @@ function renderTable(rows) {
 
   const ha = STATE.hasActual;
 
-  // グループソート: 会場順 → レース番号順 → フィルタ条件依存の内部ソート
+  // ソート: 会場→レース→内部ソート
   function gkey(r) {
     const vi = VENUES.indexOf(r.kaijoba ?? "");
     const rn = parseInt((r.race || "").replace(/\D/g, "") || "0");
-    const es = ha ? -(r.ev100 ?? -9999) : -(r.hit_pct ?? 0);
-    return [vi === -1 ? 99 : vi, rn, es];
+    const sk = readFiltersObj().sortKey;
+    let inner = 0;
+    if (sk === "ev_desc")    inner = -(r.ev100 ?? (ha ? -9999 : r.hit_pct));
+    else if (sk === "hit_desc")  inner = -r.hit_pct;
+    else if (sk === "od_asc")    inner = r.fair_odds;
+    else if (sk === "supA_desc") inner = -r.supportA;
+    return [vi === -1 ? 99 : vi, rn, inner];
   }
   const sorted = [...rows].sort((a, b) => {
     const ka = gkey(a), kb = gkey(b);
@@ -729,7 +588,7 @@ function renderTable(rows) {
     return 0;
   });
 
-  // rowspan メタデータ構築
+  // rowspan メタデータ
   const meta = [];
   let i = 0;
   while (i < sorted.length) {
@@ -754,12 +613,12 @@ function renderTable(rows) {
     }
   }
 
-  const COLS = ["kaijoba","race","combo","names","type","win_rates",
-                "hit_pct","fair_odds","actual_odds","ev100","haraimodoshi"];
+  const COLS = ["kaijoba","race","combo","names","supportA","supportB","hit_pct","fair_odds","actual_odds","ev100","payout"];
   const HEADS = {
-    kaijoba:"開催場",race:"レース",combo:"買い目",names:"馬名",type:"券種",
-    win_rates:"勝率(%)",hit_pct:"的中率(%)",fair_odds:"理論OD(倍)",
-    actual_odds:"実オッズ",ev100:"期待値",haraimodoshi:"払い戻し(円)",
+    kaijoba:"開催場", race:"レース", combo:"買い目", names:"馬名(1着→2着)",
+    supportA:"支持率1着(%)", supportB:"支持率2着(%)",
+    hit_pct:"的中率(%)", fair_odds:"理論OD(倍)",
+    actual_odds:"実オッズ", ev100:"期待値", payout:"払戻(円)",
   };
 
   let html = "<div class='tbl-wrap'><table class='kb-tbl'><thead><tr>";
@@ -767,10 +626,10 @@ function renderTable(rows) {
   html += "</tr></thead><tbody>";
 
   sorted.forEach((r, idx) => {
-    const m   = meta[idx];
-    const vn  = r.kaijoba || "";
-    const bg  = VENUE_BG[vn] || "#F5F5F5";
-    const fg  = VENUE_FG[vn] || "#546E7A";
+    const m  = meta[idx];
+    const vn = r.kaijoba || "";
+    const bg = VENUE_BG[vn] || "#F5F5F5";
+    const fg = VENUE_FG[vn] || "#546E7A";
 
     let evCls;
     if (ha) {
@@ -800,19 +659,32 @@ function renderTable(rows) {
       const tdAlign = c === "names" ? ` style="text-align:left"` : "";
       let cell;
 
-      if      (c === "combo")       cell = comboChips(r.combo || "", fg);
-      else if (c === "names")       cell = r.names || "―";
-      else if (c === "type")        cell = r.type  || "―";
-      else if (c === "win_rates")   cell = (r.win_rates||[]).length ? r.win_rates.map(x=>`${x.toFixed(1)}%`).join(" / ") : "―";
-      else if (c === "hit_pct")     cell = `${(r.hit_pct||0).toFixed(2)}%`;
-      else if (c === "fair_odds") {
-        const fo = r.fair_odds;
-        cell = (fo !== null && fo !== undefined && fo !== Infinity) ? `${fo.toFixed(1)}x` : "―";
+      if (c === "combo") {
+        const [na, nb] = r.combo.split("→");
+        cell = `<span class="num-chip" style="color:${fg}">${na}</span>` +
+               `<span class="arr" style="color:${fg}">→</span>` +
+               `<span class="num-chip" style="color:${fg}">${nb}</span>`;
+      } else if (c === "names") {
+        cell = `<span style="font-weight:bold">${r.nameA}</span>` +
+               `<span style="color:${fg};padding:0 4px">→</span>` +
+               `${r.nameB}`;
+      } else if (c === "supportA") {
+        cell = `${r.supportA.toFixed(1)}%`;
+      } else if (c === "supportB") {
+        cell = `${r.supportB.toFixed(1)}%`;
+      } else if (c === "hit_pct") {
+        cell = `${r.hit_pct.toFixed(2)}%`;
+      } else if (c === "fair_odds") {
+        cell = r.fair_odds < 9999 ? `${r.fair_odds.toFixed(1)}x` : "―";
+      } else if (c === "actual_odds") {
+        cell = r.actual_odds !== null ? `${r.actual_odds.toFixed(1)}x` : "―";
+      } else if (c === "ev100") {
+        cell = r.ev100 !== null ? `<b>${r.ev100}</b>` : "―";
+      } else if (c === "payout") {
+        cell = r.actual_odds !== null ? String(Math.round(r.actual_odds * 100)) : "―";
+      } else {
+        cell = r[c] != null ? String(r[c]) : "―";
       }
-      else if (c === "actual_odds") cell = r.actual_odds !== null ? `${r.actual_odds.toFixed(1)}x` : "―";
-      else if (c === "ev100")       cell = r.ev100 !== null ? `<b>${r.ev100}</b>` : "―";
-      else if (c === "haraimodoshi") cell = r.actual_odds !== null ? String(Math.round(r.actual_odds * 100)) : "―";
-      else cell = r[c] != null ? String(r[c]) : "―";
 
       html += `<td${tdCls}${tdAlign}>${cell}</td>`;
     }
@@ -824,17 +696,15 @@ function renderTable(rows) {
 }
 
 function updateInfoBar(total, shown) {
-  const venues  = [...new Set(STATE.results.map(r => r.kaijoba).filter(Boolean))];
-  const f       = readFiltersObj();
-  const activeBt = BET_TYPES.filter(bt => f.betTypes[bt]);
-  const haNote  = STATE.hasActual
+  const venues = [...new Set(STATE.results.map(r => r.kaijoba).filter(Boolean))];
+  const f = readFiltersObj();
+  const haNote = STATE.hasActual
     ? "<b style='color:#1B5E20'>実オッズ取得済・期待値表示中</b>"
     : "<i style='color:#78909C'>実オッズ未公開（理論ODのみ）</i>";
-  const evNote  = STATE.hasActual && f.evMin > 0 ? `　期待値≥${f.evMin}` : "";
+  const evNote = STATE.hasActual && f.evMin > 0 ? `　期待値≥${f.evMin}` : "";
   document.getElementById("infoBar").innerHTML =
     `<div class="kb-info">` +
     `<b>${venues.join("・") || "―"}</b>（${STATE.races.length}レース）　` +
-    `券種: ${activeBt.join(" / ") || "なし"}　` +
     `的中率≥${f.hitPctMin.toFixed(1)}%${evNote}　` +
     `→ <b>${total.toLocaleString()} 通り適合</b>（${shown.toLocaleString()} 件表示）　` +
     `${haNote}</div>`;
@@ -858,38 +728,17 @@ function updateVenueLegend() {
   document.getElementById("venueLegend").innerHTML = html;
 }
 
-function readFiltersObj() {
-  return {
-    hitPctMin: parseFloat(document.getElementById("hitPctMin").value) || 0,
-    evMin:     parseInt(document.getElementById("evMin").value) || 0,
-    betTypes:  Object.fromEntries(BET_TYPES.map(bt => [bt, document.getElementById(`cb_${bt}`).checked])),
-    sortKey:   document.querySelector('input[name="sortKey"]:checked')?.value || "ev_desc",
-    topN:      parseInt(document.getElementById("topN").value) || 50,
-  };
-}
-
 function applyAndRender() {
   const f = readFiltersObj();
-
   let rows = STATE.results.filter(r => {
     if (r.hit_pct < f.hitPctMin) return false;
-    if (!f.betTypes[r.type]) return false;
     if (STATE.hasActual && f.evMin > 0 && (r.ev100 === null || r.ev100 < f.evMin)) return false;
     return true;
   });
-
-  const sortFns = {
-    ev_desc:  (a, b) => (b.ev100 ?? -9999) - (a.ev100 ?? -9999),
-    hit_desc: (a, b) => b.hit_pct - a.hit_pct,
-    od_asc:   (a, b) => (a.fair_odds === Infinity ? 9999 : (a.fair_odds ?? 9999)) -
-                        (b.fair_odds === Infinity ? 9999 : (b.fair_odds ?? 9999)),
-    sup_desc: (a, b) => b.min_support - a.min_support,
-  };
-  rows.sort(sortFns[f.sortKey] || sortFns.ev_desc);
-
+  const total = rows.length;
   const shown = rows.slice(0, f.topN);
   renderTable(shown);
-  updateInfoBar(rows.length, shown.length);
+  updateInfoBar(total, shown.length);
   updateVenueLegend();
 }
 
@@ -897,11 +746,10 @@ function applyAndRender() {
 // メインフロー
 // ================================================================
 async function processRace(raceInfo) {
-  // 馬情報取得
-  const { horses: raw, source } = await getRaceHorses(raceInfo.raceId);
+  const { horses: raw } = await getRaceHorses(raceInfo.raceId);
   if (!raw.length) return;
 
-  // 正規化・Harville計算
+  // 有効な単勝オッズを持つ馬のみ
   let cnt = 0;
   const horses = [];
   for (const h of raw) {
@@ -913,50 +761,28 @@ async function processRace(raceInfo) {
   }
   if (horses.length < 2) return;
   horses.sort((a, b) => a.number - b.number);
-  normalize(horses);
-  const cache = calcAll(horses);
 
-  // 実単勝オッズで再計算
-  try {
-    const wo = await fetchWinOdds(raceInfo.raceId);
-    if (Object.keys(wo).length) recomputeWithWinOdds(horses, cache, wo);
-    await sleep(300);
-  } catch (_) {}
+  // 馬単計算（記事の式）
+  const entries = calcUmatan(horses);
 
-  // 4券種実オッズ取得・EV付与
+  // 実馬単オッズ取得・EV付与
   try {
-    const ao = await fetchOdds(raceInfo.raceId);
-    const total = Object.values(ao).reduce((s, v) => s + Object.keys(v).length, 0);
-    if (total > 0) {
-      attachActualOdds(cache, ao);
+    const ao = await fetchUmatanOdds(raceInfo.raceId);
+    if (Object.keys(ao).length > 0) {
+      attachUmatanOdds(entries, ao);
       STATE.hasActual = true;
       document.getElementById("evMin").disabled = false;
     }
+    await sleep(300);
   } catch (_) {}
 
-  // 全行を STATE.results に追加
-  for (const bt of BET_TYPES) {
-    for (const entry of cache[bt] || []) {
-      STATE.results.push({ ...entry, kaijoba: raceInfo.venue, race: raceInfo.raceNo });
-    }
+  for (const e of entries) {
+    STATE.results.push({ ...e, kaijoba: raceInfo.venue, race: raceInfo.raceNo });
   }
 }
 
 async function onFetchAndLoad() {
   if (STATE.loading) return;
-
-  // CONFIG チェック
-  if (!CONFIG.PROXY || CONFIG.PROXY.includes("YOUR_WORKER")) {
-    document.getElementById("tableContainer").innerHTML = `
-      <div class="setup-warn">
-        <h3>⚠️ 初期設定が必要です</h3>
-        <p>Cloudflare Worker をデプロイし、このファイルの先頭にある<br>
-        <code>CONFIG.PROXY</code> に Worker の URL を設定してください。</p>
-        <p>設定例: <code>const CONFIG = { PROXY: "https://keiba-proxy.yourname.workers.dev" };</code></p>
-        <p>デプロイ手順は <code>cloudflare_worker.js</code> のコメントを参照してください。</p>
-      </div>`;
-    return;
-  }
 
   const dateRaw = document.getElementById("dateInput").value.replace(/-/g, "");
   if (!/^\d{8}$/.test(dateRaw)) {
@@ -996,7 +822,6 @@ async function onFetchAndLoad() {
     return;
   }
 
-  // 会場・レース番号でフィルタ
   let filtered = allRaces;
   if (venueFilter) filtered = filtered.filter(r => r.venue === venueFilter);
   if (raceFilter)  filtered = filtered.filter(r => r.raceNo === raceFilter);
@@ -1033,23 +858,16 @@ async function onFetchAndLoad() {
 // 初期化
 // ================================================================
 document.addEventListener("DOMContentLoaded", () => {
-  // 今日の日付をデフォルト設定
   const t = new Date();
   const y = t.getFullYear();
   const mo = String(t.getMonth() + 1).padStart(2, "0");
   const d  = String(t.getDate()).padStart(2, "0");
   document.getElementById("dateInput").value = `${y}-${mo}-${d}`;
 
-  // デスクトップではサイドバーを常時展開
   if (window.innerWidth > 768) {
     const det = document.getElementById("filterDetails");
     det.open = true;
     det.querySelector("summary").style.pointerEvents = "none";
-  }
-
-  // CONFIG 未設定時の警告
-  if (!CONFIG.PROXY || CONFIG.PROXY.includes("YOUR_WORKER")) {
-    setStatus("error", "CONFIG.PROXY を設定してください");
   }
 });
 </script>
