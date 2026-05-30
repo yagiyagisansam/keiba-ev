@@ -445,16 +445,25 @@ function horsesFromResult(tableHtml) {
   return horses;
 }
 
-async function getWinOddsFromSpApi(raceId) {
-  const url = `https://race.sp.netkeiba.com/?pid=api_get_jra_odds&race_id=${raceId}&type=1&action=init`;
+/**
+ * 単勝実オッズをJSONP APIで取得（最も信頼性が高い方法）
+ * 戻り値: { 馬番(int): オッズ(float), ... }
+ */
+async function fetchWinOdds(raceId) {
+  const ODDS_API_BASE = "https://race.netkeiba.com/api/api_get_jra_odds.html";
+  const url = `${ODDS_API_BASE}?pid=api_get_jra_odds&input=UTF-8&output=jsonp` +
+              `&race_id=${raceId}&type=1&action=init&sort=odds&compress=0&callback=jQuery`;
   try {
-    const raw = await proxyFetch(url);
-    const data = JSON.parse(raw);
-    const rawOdds = data?.data?.odds?.["1"] || {};
+    const text = await proxyFetch(url);
+    const mj = text.match(/^[^(]+\(([\s\S]+)\)\s*;?\s*$/);
+    if (!mj) return {};
+    const data = JSON.parse(mj[1]);
+    if (data.status !== "result") return {};
+    const raw = data?.data?.odds?.["1"] || {};
     const result = {};
-    for (const [k, v] of Object.entries(rawOdds)) {
-      const oddsVal = v?.[0] || "";
-      if (/^[\d.]+$/.test(oddsVal)) result[parseInt(k)] = oddsVal;
+    for (const [k, vals] of Object.entries(raw)) {
+      const v = parseFloat(String(vals?.[0] || "").replace(",", ""));
+      if (v >= 1.0) result[parseInt(k)] = v;
     }
     return result;
   } catch (_) { return {}; }
@@ -466,37 +475,33 @@ async function horsesFromShutuba(raceId) {
   const tableM = html.match(/<table class="Shutuba_Table">([\s\S]*?)(?=<\/table>)/);
   if (!tableM) return [];
   const tableHtml = tableM[1];
-  const theadM = tableHtml.match(/<thead>([\s\S]*?)<\/thead>/);
-  const wakuConfirmed = !!(theadM && /<th class="Waku">/.test(theadM[1]));
+
   const horses = [];
   const rowRe = /<tr\s+class="HorseList"[^>]*>([\s\S]*?)<\/tr>/g;
   let m;
   while ((m = rowRe.exec(tableHtml)) !== null) {
     const row = m[1];
+    // チェックボックスの name 属性が最も確実な馬番ソース
     const cbM = row.match(/class="HorseCheck_Select"[^>]+name="(\d+)"/);
-    const apiKey = cbM ? parseInt(cbM[1]) : null;
-    let horseNum = null;
-    if (wakuConfirmed) {
-      const wakuM = row.match(/<td class="Waku\d+">\s*(\d+)\s*<\/td>/);
-      horseNum = wakuM ? parseInt(wakuM[1]) : null;
-    }
+    const horseNum = cbM ? parseInt(cbM[1]) : null;
+    if (!horseNum) continue;
     const nameM = row.match(/class="Horse HorseLink"[^>]*>[\s\S]*?<a[^>]+>\s*([^<]+?)\s*<\/a>/);
     if (!nameM) continue;
-    const horseName = nameM[1].replace(/ /g, "").trim();
-    horses.push({ number: horseNum, name: horseName, _apiKey: apiKey });
+    const horseName = nameM[1].replace(/\s+/g, "").trim();
+    horses.push({ number: horseNum, name: horseName });
   }
   if (!horses.length) return [];
-  await sleep(500);
-  const oddsMap = await getWinOddsFromSpApi(raceId);
-  if (wakuConfirmed) {
-    horses.sort((a, b) => (a.number ?? 9999) - (b.number ?? 9999));
-  } else {
-    horses.sort((a, b) => (a._apiKey ?? 9999) - (b._apiKey ?? 9999));
-  }
-  return horses.map(h => {
-    const key = wakuConfirmed ? h.number : h._apiKey;
-    return { number: h.number ?? null, name: h.name, odds: (key !== null ? oddsMap[key] || "" : "") };
-  });
+
+  await sleep(300);
+  // JSONP APIで単勝オッズを取得（最も信頼性が高い）
+  const oddsMap = await fetchWinOdds(raceId);
+
+  horses.sort((a, b) => a.number - b.number);
+  return horses.map(h => ({
+    number: h.number,
+    name:   h.name,
+    odds:   oddsMap[h.number] ? String(oddsMap[h.number]) : "",
+  }));
 }
 
 async function getRaceHorses(raceId) {
