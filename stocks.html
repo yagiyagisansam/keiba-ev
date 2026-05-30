@@ -112,6 +112,18 @@ body{
   border-radius:99px;padding:3px 10px;
   font-size:12px;font-weight:bold;
 }
+.supporting-badges{
+  display:flex;flex-wrap:wrap;gap:5px;
+  padding:2px 16px 10px;align-items:center;
+}
+.supporting-label{
+  font-size:11px;color:#78909C;font-weight:bold;white-space:nowrap;margin-right:2px;
+}
+.sbadge{
+  background:#F5F5F5;color:#546E7A;
+  border-radius:99px;padding:2px 9px;
+  font-size:11px;border:1px solid #ECEFF1;
+}
 
 /* ── パターン + チャートセクション ── */
 .card-body{padding:12px 16px 16px}
@@ -347,44 +359,54 @@ body{
 const CATEGORIES = [
   {
     id: 'candle',
-    label: 'ローソク足パターン',
+    label: 'ローソク足・酒田五法（A・B群）',
     methods: [
       { key: 'bullish_engulfing',    label: '陽の包み足' },
       { key: 'hammer',               label: '下ひげ陽線（ハンマー）' },
       { key: 'morning_star',         label: '朝の明星' },
       { key: 'three_white_soldiers', label: '陽の三兵' },
       { key: 'gap_up',               label: '窓開け陽線' },
-      { key: 'large_bullish',        label: '大陽線（実体3%超）' },
-      { key: 'dragonfly_doji',       label: 'たくり線' },
-      { key: 'piercing',             label: '切り込み線' },
+      { key: 'large_bullish_5pct',   label: '大陽線5%超（A-05）' },
+      { key: 'uwabane_large',        label: '上放れ陽線（A-07）' },
+      { key: 'sankasen_akebono',     label: '三川明けの明星（B-02）' },
+      { key: 'island_reversal',      label: '離れ小島（B-06）' },
+      { key: 'triple_bottom',        label: '三点底（B-08）' },
+      { key: 'engulfing_vol',        label: '包み足＋出来高（B-10）' },
+      { key: 'gap_vol',              label: '窓開け＋出来高（B-11）' },
+      { key: 'narabiaka',            label: '上放れ並び赤' },
     ],
   },
   {
     id: 'ma',
-    label: '移動平均線',
+    label: '移動平均線・トレンド',
     methods: [
       { key: 'perfect_order',       label: 'パーフェクトオーダー' },
-      { key: 'gc_5_25',             label: 'GC 5/25日線' },
       { key: 'gc_25_75',            label: 'GC 25/75日線' },
       { key: 'ma25_debut',          label: '25日線デビュー買い' },
       { key: 'ma75_recovery',       label: '75日線回復' },
       { key: 'ma_squeeze_breakout', label: 'MA収束後ブレイク' },
       { key: 'price_above_all_ma',  label: '株価が全MA上' },
+      { key: 'ma25_touch_rebound',  label: '25日線タッチ反発（C-08）' },
+      { key: 'weinstein_stage2',    label: 'ワインスタインS2（C-10）' },
+      { key: 'ppp',                 label: 'パンパカパン（PPP）' },
     ],
   },
   {
     id: 'volume',
-    label: '出来高',
+    label: '出来高・OBV（D群）',
     methods: [
-      { key: 'vol_surge_150',  label: '出来高急増（前日比150%超）' },
-      { key: 'new_high_vol',   label: '新高値＋出来高急増' },
-      { key: 'vol_dry_surge',  label: '出来高枯れ→急増' },
-      { key: 'vol_above_ma25', label: '出来高25日平均超え' },
+      { key: 'vol_surge_150',    label: '出来高急増（前日比150%超）' },
+      { key: 'new_high_vol',     label: '新高値＋出来高急増' },
+      { key: 'vol_dry_surge',    label: '出来高枯れ→急増' },
+      { key: 'vol_surge_200',    label: '出来高200%急増（D-02）' },
+      { key: 'obv_new_high',     label: 'OBV新高値（D-06）' },
+      { key: 'pocket_pivot',     label: 'ポケットピボット（D-07）' },
+      { key: 'vol_acceleration', label: '出来高加速（D-09）' },
     ],
   },
   {
     id: 'chart',
-    label: 'チャートパターン',
+    label: 'チャートパターン（E・F・G群）',
     methods: [
       { key: 'vcp',               label: 'VCP（ボラティリティ収縮）' },
       { key: 'cup_with_handle',   label: 'カップウィズハンドル' },
@@ -392,17 +414,26 @@ const CATEGORIES = [
       { key: 'double_bottom',     label: 'ダブルボトム（W底）' },
       { key: 'flag',              label: 'フラッグ・ペナント' },
       { key: 'inv_head_shoulders',label: '逆ヘッド&ショルダー' },
+      { key: 'high_level_tight',  label: '高値圏コンソリデーション' },
+      { key: 'super_tight',       label: 'スーパータイト（E-03）' },
+      { key: 'high_tight_flag',   label: 'ハイタイトフラッグ（E-06）' },
+      { key: 'v_recovery',        label: 'V字回復（F-03）' },
+      { key: 'inv_triple_bottom', label: '逆三山（F-05+F-08）' },
+      { key: 'saucer_bottom',     label: '円形底（F-06）' },
+      { key: 'ascending_triangle',label: '上昇三角形（G-03）' },
+      { key: 'alltime_high',      label: '上場来高値更新（G-05）' },
+      { key: 'base_breakout',     label: 'ベース内ブレイク（G-07）' },
     ],
   },
   {
-    id: 'momentum',
-    label: 'モメンタム',
+    id: 'indicator',
+    label: 'テクニカル指標・複合（I・K群）',
     methods: [
-      { key: 'rsi_50_cross', label: 'RSI 50超え回復' },
-      { key: 'macd_gc',      label: 'MACDゴールデンクロス' },
-      { key: 'bb_squeeze',   label: 'BBスクイーズ→拡張' },
-      { key: '52week_high',  label: '52週新高値' },
-      { key: 'high_level_tight', label: '高値圏コンソリデーション' },
+      { key: '52week_high',      label: '52週新高値' },
+      { key: 'williams_r',       label: 'ウィリアムズ%R（I-10）' },
+      { key: 'canslim',          label: 'CAN-SLIM複合（K-04）' },
+      { key: 'neckline_vol',     label: 'ネックライン突破＋出来高（K-07）' },
+      { key: 'weekly_po_first',  label: '週足PO初達成（K-09）' },
     ],
   },
 ];
@@ -695,6 +726,272 @@ const PATTERN_INFO = {
     </svg>`,
     desc: '年初来高値の90%圏内での超タイト保ち合い後のブレイク。上昇途中での一段高前のセットアップ。',
   },
+  // ── A群 ──
+  large_bullish_5pct: {
+    svg: `<svg width="72" height="60" viewBox="0 0 72 60" fill="none">
+      <line x1="36" y1="2" x2="36" y2="58" stroke="#1b5e20" stroke-width="1.5"/>
+      <rect x="27" y="8" width="18" height="46" fill="#1b5e20"/>
+      <text x="36" y="6" font-size="9" fill="#1b5e20" text-anchor="middle">5%+</text>
+    </svg>`,
+    desc: '実体が前日終値比5%超の大陽線。65日安値から30%超上昇時は除外（クライマックス買い回避）。',
+  },
+  uwabane_large: {
+    svg: `<svg width="72" height="60" viewBox="0 0 72 60" fill="none">
+      <line x1="26" y1="32" x2="26" y2="52" stroke="#c62828" stroke-width="1.5"/>
+      <rect x="20" y="36" width="12" height="14" fill="#c62828"/>
+      <text x="40" y="28" font-size="9" fill="#888" text-anchor="middle">↑ 窓</text>
+      <line x1="50" y1="8" x2="50" y2="34" stroke="#1b5e20" stroke-width="1.5"/>
+      <rect x="44" y="12" width="12" height="18" fill="#1b5e20"/>
+    </svg>`,
+    desc: '前日高値を超えて窓開け（1〜10%）＋実体3%以上＋出来高MA25の2倍以上。機関買いの強い窓。',
+  },
+  // ── B群 ──
+  sankasen_akebono: {
+    svg: `<svg width="72" height="60" viewBox="0 0 72 60" fill="none">
+      <line x1="18" y1="4" x2="18" y2="52" stroke="#c62828" stroke-width="1.5"/>
+      <rect x="12" y="10" width="12" height="36" fill="#c62828"/>
+      <rect x="32" y="34" width="8" height="6" fill="#888"/>
+      <line x1="36" y1="30" x2="36" y2="44" stroke="#888" stroke-width="1.5"/>
+      <line x1="54" y1="6" x2="54" y2="50" stroke="#1b5e20" stroke-width="1.5"/>
+      <rect x="48" y="12" width="12" height="30" fill="#1b5e20"/>
+    </svg>`,
+    desc: '陰線→窓開け下小実体→窓開け上大陽線の3本。三川明けの明星。前日中値超えで完成。',
+  },
+  island_reversal: {
+    svg: `<svg width="72" height="60" viewBox="0 0 72 60" fill="none">
+      <rect x="8" y="12" width="10" height="20" fill="#c62828"/>
+      <text x="36" y="26" font-size="8" fill="#888" text-anchor="middle">孤立</text>
+      <rect x="28" y="22" width="18" height="14" fill="#90A4AE" opacity=".5"/>
+      <rect x="54" y="8" width="10" height="18" fill="#1b5e20"/>
+    </svg>`,
+    desc: '窓開け下落で孤立した「島」を形成後、窓開け上昇で脱出。出来高急増で完成。完全な需給逆転。',
+  },
+  triple_bottom: {
+    svg: `<svg width="72" height="60" viewBox="0 0 72 60" fill="none">
+      <polyline points="4,10 18,48 32,10 46,48 60,10 68,28" stroke="#1565c0" stroke-width="1.5" fill="none"/>
+      <line x1="4" y1="10" x2="68" y2="10" stroke="#c62828" stroke-width="1" stroke-dasharray="3,2"/>
+    </svg>`,
+    desc: '3つの安値が±3%以内で揃う三点底。ネックライン突破＋出来高MA25×1.5倍で完成。',
+  },
+  engulfing_vol: {
+    svg: `<svg width="72" height="60" viewBox="0 0 72 60" fill="none">
+      <line x1="28" y1="8" x2="28" y2="52" stroke="#c62828" stroke-width="1.5"/>
+      <rect x="22" y="16" width="12" height="28" fill="#c62828"/>
+      <line x1="46" y1="4" x2="46" y2="56" stroke="#1b5e20" stroke-width="1.5"/>
+      <rect x="38" y="10" width="16" height="40" fill="#1b5e20"/>
+      <text x="58" y="56" font-size="8" fill="#1565c0">RSI≤40</text>
+    </svg>`,
+    desc: '前日実体1.5倍超の包み足＋出来高前日比150%＋RSI≤40＋MA付近。4条件全必須の強い反転。',
+  },
+  gap_vol: {
+    svg: `<svg width="72" height="60" viewBox="0 0 72 60" fill="none">
+      <line x1="26" y1="30" x2="26" y2="52" stroke="#c62828" stroke-width="1.5"/>
+      <rect x="20" y="36" width="12" height="14" fill="#c62828"/>
+      <line x1="46" y1="6" x2="46" y2="28" stroke="#1b5e20" stroke-width="1.5"/>
+      <rect x="40" y="10" width="12" height="16" fill="#1b5e20"/>
+      <rect x="18" y="54" width="8" height="5" fill="#90CAF9"/>
+      <rect x="40" y="46" width="8" height="12" fill="#1565c0"/>
+    </svg>`,
+    desc: '窓開け1%以上＋出来高MA25の2倍超＋52週高値5%以内。O\'Neil窓開けブレイク。注：市場全体の調整局面では偽シグナルあり。',
+  },
+  narabiaka: {
+    svg: `<svg width="72" height="60" viewBox="0 0 72 60" fill="none">
+      <line x1="24" y1="28" x2="24" y2="52" stroke="#c62828" stroke-width="1.5"/>
+      <rect x="18" y="34" width="12" height="16" fill="#c62828"/>
+      <text x="36" y="26" font-size="8" fill="#888" text-anchor="middle">↑ 窓</text>
+      <line x1="40" y1="6" x2="40" y2="30" stroke="#1b5e20" stroke-width="1.5"/>
+      <rect x="34" y="10" width="12" height="18" fill="#1b5e20"/>
+      <line x1="58" y1="4" x2="58" y2="28" stroke="#1b5e20" stroke-width="1.5"/>
+      <rect x="52" y="8" width="12" height="18" fill="#1b5e20"/>
+    </svg>`,
+    desc: '窓開け陽線の翌日、同じ始値水準（±3%）・同サイズ（50〜150%）の陽線。機関の継続買いを示す。',
+  },
+  // ── C群 ──
+  ma25_touch_rebound: {
+    svg: `<svg width="72" height="60" viewBox="0 0 72 60" fill="none">
+      <path d="M4 20 Q36 28 68 14" stroke="#fb8c00" stroke-width="1.5" fill="none"/>
+      <circle cx="48" cy="30" r="3" fill="#1b5e20"/>
+      <line x1="48" y1="24" x2="48" y2="48" stroke="#1b5e20" stroke-width="1.5"/>
+      <rect x="43" y="30" width="10" height="14" fill="#1b5e20"/>
+    </svg>`,
+    desc: 'MA25上向き＋MA75<MA25時に前日MA25±5%まで接近し当日陽線で反発。RSI35〜65。押し目買いの黄金パターン。',
+  },
+  weinstein_stage2: {
+    svg: `<svg width="72" height="60" viewBox="0 0 72 60" fill="none">
+      <path d="M4 44 Q24 44 40 44 Q52 38 68 18" stroke="#1565c0" stroke-width="1.5" fill="none"/>
+      <circle cx="40" cy="44" r="3" fill="#e53935"/>
+      <text x="4" y="14" font-size="8" fill="#1565c0">Stage2↗</text>
+    </svg>`,
+    desc: 'MA75が65日間フラット（±3%）後に上向き転換。株価MA75上＋出来高65日平均×1.5。ワインスタインの最強買い場。',
+  },
+  ppp: {
+    svg: `<svg width="72" height="60" viewBox="0 0 72 60" fill="none">
+      <path d="M4 52 Q36 42 68 14" stroke="#e53935" stroke-width="1.5" fill="none"/>
+      <path d="M4 56 Q36 48 68 24" stroke="#fb8c00" stroke-width="1.5" fill="none"/>
+      <path d="M4 58 Q36 54 68 36" stroke="#1565c0" stroke-width="1.5" fill="none"/>
+      <circle cx="30" cy="48" r="4" fill="#c62828"/>
+      <circle cx="68" cy="12" r="4" fill="#1b5e20"/>
+      <text x="2" y="11" font-size="7" fill="#263238">初達成!</text>
+    </svg>`,
+    desc: '前日は非PO→当日初めてPO成立（株価>5MA>25MA>75MA、全MA上向き）。相場師朗のパンパカパン初達成シグナル。',
+  },
+  // ── D群 ──
+  vol_surge_200: {
+    svg: `<svg width="72" height="60" viewBox="0 0 72 60" fill="none">
+      <rect x="14" y="38" width="10" height="14" fill="#90CAF9"/>
+      <rect x="48" y="24" width="10" height="28" fill="#1565c0"/>
+      <line x1="44" y1="8" x2="44" y2="26" stroke="#1b5e20" stroke-width="1.5"/>
+      <rect x="38" y="12" width="12" height="12" fill="#1b5e20"/>
+      <text x="54" y="22" font-size="8" fill="#1565c0">×2</text>
+    </svg>`,
+    desc: '出来高が前日比2倍以上＋実体3%超の大陽線＋52週高値付近。機関投資家の大規模買い参入の証拠。',
+  },
+  obv_new_high: {
+    svg: `<svg width="72" height="60" viewBox="0 0 72 60" fill="none">
+      <path d="M4 50 Q20 46 36 38 Q52 30 68 18" stroke="#1565c0" stroke-width="2" fill="none"/>
+      <path d="M4 48 Q20 46 36 44 Q52 44 68 40" stroke="#90A4AE" stroke-width="1" stroke-dasharray="3,2" fill="none"/>
+      <text x="4" y="14" font-size="8" fill="#1565c0">OBV↗</text>
+      <text x="4" y="24" font-size="8" fill="#90A4AE">価格―</text>
+    </svg>`,
+    desc: 'OBVが20日高値を更新、価格はまだ更新していない。スマートマネーの先行買いを先読みする早期検知。',
+  },
+  pocket_pivot: {
+    svg: `<svg width="72" height="60" viewBox="0 0 72 60" fill="none">
+      <rect x="14" y="38" width="8" height="14" fill="#c62828" opacity=".6"/>
+      <rect x="26" y="42" width="8" height="10" fill="#90A4AE"/>
+      <rect x="38" y="40" width="8" height="12" fill="#c62828" opacity=".6"/>
+      <line x1="54" y1="10" x2="54" y2="52" stroke="#1b5e20" stroke-width="1.5"/>
+      <rect x="48" y="16" width="12" height="34" fill="#1b5e20"/>
+      <rect x="50" y="54" width="8" height="16" fill="#1565c0"/>
+    </svg>`,
+    desc: '陽線でMA25以上、当日出来高が直近10日の全陰線日出来高を上回る。O\'Neilのポケットピボット。',
+  },
+  vol_acceleration: {
+    svg: `<svg width="72" height="60" viewBox="0 0 72 60" fill="none">
+      <line x1="22" y1="36" x2="22" y2="52" stroke="#1b5e20" stroke-width="1.5"/>
+      <rect x="17" y="40" width="10" height="10" fill="#1b5e20"/>
+      <line x1="38" y1="26" x2="38" y2="52" stroke="#1b5e20" stroke-width="1.5"/>
+      <rect x="33" y="30" width="10" height="20" fill="#1b5e20"/>
+      <line x1="54" y1="10" x2="54" y2="52" stroke="#1b5e20" stroke-width="1.5"/>
+      <rect x="49" y="14" width="10" height="36" fill="#1b5e20"/>
+      <rect x="17" y="52" width="10" height="6" fill="#90CAF9"/>
+      <rect x="33" y="46" width="10" height="12" fill="#90CAF9"/>
+      <rect x="49" y="38" width="10" height="20" fill="#1565c0"/>
+    </svg>`,
+    desc: '3日連続陽線＋終値上昇＋出来高加速（各日増加）。強いモメンタムの継続確認シグナル。',
+  },
+  // ── E群 ──
+  super_tight: {
+    svg: `<svg width="72" height="60" viewBox="0 0 72 60" fill="none">
+      <line x1="4" y1="30" x2="68" y2="30" stroke="#c62828" stroke-width="1" stroke-dasharray="3,2"/>
+      <rect x="20" y="28" width="8" height="4" fill="#1b5e20"/>
+      <rect x="32" y="29" width="8" height="3" fill="#c62828"/>
+      <rect x="44" y="28" width="8" height="3" fill="#1b5e20"/>
+      <text x="36" y="52" font-size="8" fill="#1565c0" text-anchor="middle">&lt;3%</text>
+    </svg>`,
+    desc: '5日値幅3%未満＋出来高MA25の33%以下＋52週高値5%以内＋MA25上。機関の静かな買い集め完了。',
+  },
+  high_tight_flag: {
+    svg: `<svg width="72" height="60" viewBox="0 0 72 60" fill="none">
+      <polyline points="4,54 16,30 28,6" stroke="#1b5e20" stroke-width="2" fill="none"/>
+      <rect x="28" y="10" width="34" height="16" fill="none" stroke="#fb8c00" stroke-width="1" stroke-dasharray="3,2"/>
+      <line x1="62" y1="6" x2="62" y2="30" stroke="#1b5e20" stroke-width="1.5"/>
+      <rect x="57" y="10" width="10" height="16" fill="#1b5e20"/>
+    </svg>`,
+    desc: '56日以内に100%超の急騰後、20%以内で1〜6週調整＋出来高枯れ→急増ブレイク。O\'Neil最高評価パターン。',
+  },
+  // ── F群 ──
+  v_recovery: {
+    svg: `<svg width="72" height="60" viewBox="0 0 72 60" fill="none">
+      <polyline points="4,10 36,50 68,12" stroke="#1565c0" stroke-width="2" fill="none"/>
+      <line x1="36" y1="20" x2="36" y2="50" stroke="#1b5e20" stroke-width="1.5"/>
+      <rect x="30" y="26" width="12" height="22" fill="#1b5e20"/>
+    </svg>`,
+    desc: '前日5〜15%下落→当日50%以上回復の陽線、出来高は前日より少ない。MA付近での発生で信頼性UP。',
+  },
+  inv_triple_bottom: {
+    svg: `<svg width="72" height="60" viewBox="0 0 72 60" fill="none">
+      <polyline points="4,14 18,50 32,10 46,44 60,8 68,20" stroke="#1565c0" stroke-width="1.5" fill="none"/>
+      <line x1="4" y1="8" x2="68" y2="8" stroke="#c62828" stroke-width="1" stroke-dasharray="3,2"/>
+    </svg>`,
+    desc: '3安値が切り上がり（v1<v2<v3）＋各安値で出来高縮小＋ネックライン突破＋出来高急増。売り方消耗の確認。',
+  },
+  saucer_bottom: {
+    svg: `<svg width="72" height="60" viewBox="0 0 72 60" fill="none">
+      <path d="M4 12 Q20 50 36 52 Q52 50 68 12" stroke="#1565c0" stroke-width="2" fill="none"/>
+      <line x1="4" y1="12" x2="68" y2="12" stroke="#c62828" stroke-width="1" stroke-dasharray="3,2"/>
+      <circle cx="68" cy="10" r="3" fill="#1b5e20"/>
+    </svg>`,
+    desc: '90日間のU字形底値（放物線フィット）。底が中央70%内＋後半出来高>前半＋現在90日高値90%以上。',
+  },
+  // ── G群 ──
+  ascending_triangle: {
+    svg: `<svg width="72" height="60" viewBox="0 0 72 60" fill="none">
+      <line x1="4" y1="16" x2="68" y2="16" stroke="#c62828" stroke-width="1.5"/>
+      <polyline points="4,54 20,46 36,36 52,28 68,16" stroke="#1565c0" stroke-width="1.5" fill="none"/>
+      <circle cx="68" cy="14" r="3" fill="#1b5e20"/>
+    </svg>`,
+    desc: '60日間の水平上値抵抗（標準偏差/平均2%以下）＋上昇する下値サポート。出来高MA25×1.5でブレイク。成功率83%。',
+  },
+  alltime_high: {
+    svg: `<svg width="72" height="60" viewBox="0 0 72 60" fill="none">
+      <path d="M4 52 Q20 44 36 30 Q52 16 68 6" stroke="#1b5e20" stroke-width="2" fill="none"/>
+      <circle cx="68" cy="6" r="4" fill="#1b5e20"/>
+      <text x="36" y="58" font-size="8" fill="#c62828" text-anchor="middle">上場来高値!</text>
+    </svg>`,
+    desc: '株式分割調整済みの上場来高値を更新。過去の高値を全て超えた最強のブレイクアウト。yfinance period=maxで判定。',
+  },
+  base_breakout: {
+    svg: `<svg width="72" height="60" viewBox="0 0 72 60" fill="none">
+      <rect x="4" y="24" width="52" height="20" fill="#E3F2FD" stroke="#90CAF9" stroke-width="1"/>
+      <text x="30" y="37" font-size="8" fill="#546E7A" text-anchor="middle">ベース</text>
+      <line x1="56" y1="12" x2="56" y2="46" stroke="#1b5e20" stroke-width="1.5"/>
+      <rect x="51" y="16" width="10" height="28" fill="#1b5e20"/>
+    </svg>`,
+    desc: '20日値幅10%以内のベース内で直近5〜10日高値を出来高×1.3で突破。MA25上。O\'Neil中間ピボット。',
+  },
+  // ── I群 ──
+  williams_r: {
+    svg: `<svg width="72" height="60" viewBox="0 0 72 60" fill="none">
+      <line x1="4" y1="50" x2="68" y2="50" stroke="#c62828" stroke-width="1" stroke-dasharray="3,2"/>
+      <line x1="4" y1="26" x2="68" y2="26" stroke="#1b5e20" stroke-width="1" stroke-dasharray="3,2"/>
+      <path d="M4 30 Q20 54 36 52 Q52 30 68 22" stroke="#1565c0" stroke-width="2" fill="none"/>
+      <text x="4" y="14" font-size="7" fill="#90A4AE">-50</text>
+      <text x="4" y="58" font-size="7" fill="#90A4AE">-80</text>
+    </svg>`,
+    desc: '過去14日に%R≤-80（売られすぎ）→現在%R≥-50への回復＋MA25上向き。リバウンド初動の検知。',
+  },
+  // ── K群 ──
+  canslim: {
+    svg: `<svg width="72" height="60" viewBox="0 0 72 60" fill="none">
+      <path d="M4 52 Q36 38 68 10" stroke="#e53935" stroke-width="1.5" fill="none"/>
+      <path d="M4 56 Q36 46 68 22" stroke="#fb8c00" stroke-width="1.5" fill="none"/>
+      <path d="M4 58 Q36 52 68 34" stroke="#1565c0" stroke-width="1.5" fill="none"/>
+      <circle cx="68" cy="8" r="4" fill="#1b5e20"/>
+      <text x="4" y="10" font-size="8" fill="#263238">PO+高値+出来高</text>
+    </svg>`,
+    desc: 'パーフェクトオーダー＋52週新高値更新＋出来高MA25×1.5の三重同時成立。O\'Neil CAN-SLIM技術的条件。勝率72〜78%。',
+  },
+  neckline_vol: {
+    svg: `<svg width="72" height="60" viewBox="0 0 72 60" fill="none">
+      <line x1="4" y1="20" x2="68" y2="20" stroke="#c62828" stroke-width="1.5" stroke-dasharray="4,2"/>
+      <text x="4" y="16" font-size="7" fill="#c62828">ネックライン</text>
+      <line x1="54" y1="6" x2="54" y2="22" stroke="#1b5e20" stroke-width="1.5"/>
+      <rect x="48" y="8" width="12" height="12" fill="#1b5e20"/>
+      <rect x="48" y="44" width="12" height="14" fill="#1565c0"/>
+    </svg>`,
+    desc: '直近20日高値（ネックライン）を終値で突破＋出来高MA25×1.5。F・G群パターンの汎用出来高確認フィルター。',
+  },
+  weekly_po_first: {
+    svg: `<svg width="72" height="60" viewBox="0 0 72 60" fill="none">
+      <path d="M4 52 Q36 44 68 14" stroke="#e53935" stroke-width="2" fill="none"/>
+      <path d="M4 56 Q36 50 68 24" stroke="#fb8c00" stroke-width="2" fill="none"/>
+      <path d="M4 58 Q36 54 68 36" stroke="#1565c0" stroke-width="2" fill="none"/>
+      <text x="36" y="10" font-size="8" fill="#263238" text-anchor="middle">週足PO初!</text>
+      <text x="36" y="56" font-size="7" fill="#90A4AE" text-anchor="middle">金曜のみ</text>
+    </svg>`,
+    desc: '週足5w>13w>26w MA全上向きを初達成（金曜のみ）。26週間PO未達成後の初転換。長期下落からの転換確認。',
+  },
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -777,14 +1074,16 @@ function render() {
 
   const stocks = (state.results && state.results.stocks) || [];
 
-  // 有効な手法でフィルタリング
+  // 有効な手法でフィルタリング（単独 + 補助）
   const filtered = stocks.map(s => ({
     ...s,
-    matches: s.matches.filter(m => state.enabledMethods.has(m.key)),
-  })).filter(s => s.matches.length > 0);
+    matches:    (s.matches    || []).filter(m => state.enabledMethods.has(m.key)),
+    supporting: (s.supporting || []).filter(m => state.enabledMethods.has(m.key)),
+  })).filter(s => s.matches.length > 0 || s.supporting.length > 0);
 
   const unmatched = stocks.filter(s =>
-    !s.matches.some(m => state.enabledMethods.has(m.key))
+    !(s.matches    || []).some(m => state.enabledMethods.has(m.key)) &&
+    !(s.supporting || []).some(m => state.enabledMethods.has(m.key))
   );
 
   // マッチ数バッジ
@@ -880,16 +1179,35 @@ function buildCard(s, idx) {
   `;
   card.appendChild(hdr);
 
-  // マッチ手法バッジ
-  const badges = document.createElement('div');
-  badges.className = 'match-badges';
-  s.matches.forEach(m => {
-    const b = document.createElement('span');
-    b.className = 'mbadge';
-    b.textContent = m.label;
-    badges.appendChild(b);
-  });
-  card.appendChild(badges);
+  // 単独シグナルバッジ
+  if (s.matches && s.matches.length > 0) {
+    const badges = document.createElement('div');
+    badges.className = 'match-badges';
+    s.matches.forEach(m => {
+      const b = document.createElement('span');
+      b.className = 'mbadge';
+      b.textContent = m.label;
+      badges.appendChild(b);
+    });
+    card.appendChild(badges);
+  }
+
+  // 補助指標バッジ
+  if (s.supporting && s.supporting.length > 0) {
+    const suppDiv = document.createElement('div');
+    suppDiv.className = 'supporting-badges';
+    const lbl = document.createElement('span');
+    lbl.className = 'supporting-label';
+    lbl.textContent = '補助:';
+    suppDiv.appendChild(lbl);
+    s.supporting.forEach(m => {
+      const b = document.createElement('span');
+      b.className = 'sbadge';
+      b.textContent = m.label;
+      suppDiv.appendChild(b);
+    });
+    card.appendChild(suppDiv);
+  }
 
   // カードボディ（パターン解説 + チャート）
   const body = document.createElement('div');
