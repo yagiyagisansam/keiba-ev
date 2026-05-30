@@ -235,12 +235,24 @@ hr.div{border:none;border-top:1px solid #E0E0E0;margin:8px 0;}
                  oninput="document.getElementById('hitPctMinVal').textContent=parseFloat(this.value).toFixed(1)">
           <span class="slider-val" id="hitPctMinVal">10.0</span>
         </div>
+        <span class="kb-lbl">的中率 上限 (%) <span style="font-size:11px;color:#90A4AE">0=上限なし</span></span>
+        <div class="slider-row">
+          <input type="range" id="hitPctMax" min="0" max="100" step="0.5" value="0"
+                 oninput="document.getElementById('hitPctMaxVal').textContent=parseFloat(this.value).toFixed(1)===('0.0')?'∞':parseFloat(this.value).toFixed(1)">
+          <span class="slider-val" id="hitPctMaxVal">∞</span>
+        </div>
 
         <span class="kb-lbl">期待値 下限（実オッズ取得後に有効）</span>
         <div class="slider-row">
           <input type="range" id="evMin" min="0" max="200" step="1" value="0" disabled
                  oninput="document.getElementById('evMinVal').textContent=this.value">
           <span class="slider-val" id="evMinVal">0</span>
+        </div>
+        <span class="kb-lbl">期待値 上限（実オッズ取得後に有効）<span style="font-size:11px;color:#90A4AE"> 0=上限なし</span></span>
+        <div class="slider-row">
+          <input type="range" id="evMax" min="0" max="200" step="1" value="0" disabled
+                 oninput="document.getElementById('evMaxVal').textContent=this.value===('0')?'∞':this.value">
+          <span class="slider-val" id="evMaxVal">∞</span>
         </div>
 
         <hr class="div">
@@ -505,13 +517,15 @@ function comboToKey(comboKey, betType) {
 async function fetchOddsRaw(raceId, typeNum) {
   const url = `${ODDS_API_BASE}?pid=api_get_jra_odds&input=UTF-8&output=jsonp` +
               `&race_id=${raceId}&type=${typeNum}&action=init&sort=odds&compress=0&callback=jQuery`;
-  const text = await proxyFetch(url);
-  const m = text.match(/^[^(]+\(([\s\S]+)\)\s*;?\s*$/);
-  if (!m) return {};
-  let data;
-  try { data = JSON.parse(m[1]); } catch (_) { return {}; }
-  if (data.status !== "result") return {};
-  return data?.data?.odds?.[typeNum] || {};
+  try {
+    const text = await proxyFetch(url);
+    const m = text.match(/^[^(]+\(([\s\S]+)\)\s*;?\s*$/);
+    if (!m) return {};
+    let data;
+    try { data = JSON.parse(m[1]); } catch (_) { return {}; }
+    // statusに関わらずデータがあれば取得（発走直後はstatus="result"以外になる場合がある）
+    return data?.data?.odds?.[typeNum] || {};
+  } catch (_) { return {}; }
 }
 
 /** 単勝実オッズを取得 {馬番: float} */
@@ -861,7 +875,9 @@ function updateVenueLegend() {
 function readFiltersObj() {
   return {
     hitPctMin: parseFloat(document.getElementById("hitPctMin").value) || 0,
+    hitPctMax: parseFloat(document.getElementById("hitPctMax").value) || 0,
     evMin:     parseInt(document.getElementById("evMin").value) || 0,
+    evMax:     parseInt(document.getElementById("evMax").value) || 0,
     betTypes:  Object.fromEntries(BET_TYPES.map(bt => [bt, document.getElementById(`cb_${bt}`).checked])),
     sortKey:   document.querySelector('input[name="sortKey"]:checked')?.value || "ev_desc",
     topN:      parseInt(document.getElementById("topN").value) || 50,
@@ -873,8 +889,10 @@ function applyAndRender() {
 
   let rows = STATE.results.filter(r => {
     if (r.hit_pct < f.hitPctMin) return false;
+    if (f.hitPctMax > 0 && r.hit_pct > f.hitPctMax) return false;
     if (!f.betTypes[r.type]) return false;
     if (STATE.hasActual && f.evMin > 0 && (r.ev100 === null || r.ev100 < f.evMin)) return false;
+    if (STATE.hasActual && f.evMax > 0 && (r.ev100 === null || r.ev100 > f.evMax)) return false;
     return true;
   });
 
@@ -931,6 +949,7 @@ async function processRace(raceInfo) {
       attachActualOdds(cache, ao);
       STATE.hasActual = true;
       document.getElementById("evMin").disabled = false;
+      document.getElementById("evMax").disabled = false;
     }
   } catch (_) {}
 
@@ -973,6 +992,7 @@ async function onFetchAndLoad() {
   STATE.hasActual = false;
   document.getElementById("fetchBtn").disabled = true;
   document.getElementById("evMin").disabled    = true;
+  document.getElementById("evMax").disabled    = true;
   document.getElementById("tableContainer").innerHTML = '<p class="empty-msg">取得中...</p>';
   document.getElementById("infoBar").innerHTML = "";
   updateVenueLegend();

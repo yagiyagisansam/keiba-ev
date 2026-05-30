@@ -237,12 +237,24 @@ hr.div{border:none;border-top:1px solid #E0E0E0;margin:8px 0;}
                  oninput="document.getElementById('hitPctMinVal').textContent=parseFloat(this.value).toFixed(1)">
           <span class="slider-val" id="hitPctMinVal">8.0</span>
         </div>
+        <span class="kb-lbl">的中率 上限 (%) <span style="font-size:11px;color:#90A4AE">0=上限なし</span></span>
+        <div class="slider-row">
+          <input type="range" id="hitPctMax" min="0" max="100" step="0.5" value="0"
+                 oninput="document.getElementById('hitPctMaxVal').textContent=parseFloat(this.value).toFixed(1)==='0.0'?'∞':parseFloat(this.value).toFixed(1)">
+          <span class="slider-val" id="hitPctMaxVal">∞</span>
+        </div>
 
         <span class="kb-lbl">期待値 下限（実オッズ取得後に有効）</span>
         <div class="slider-row">
           <input type="range" id="evMin" min="0" max="200" step="1" value="0" disabled
                  oninput="document.getElementById('evMinVal').textContent=this.value">
           <span class="slider-val" id="evMinVal">0</span>
+        </div>
+        <span class="kb-lbl">期待値 上限（実オッズ取得後に有効）<span style="font-size:11px;color:#90A4AE"> 0=上限なし</span></span>
+        <div class="slider-row">
+          <input type="range" id="evMax" min="0" max="200" step="1" value="0" disabled
+                 oninput="document.getElementById('evMaxVal').textContent=this.value==='0'?'∞':this.value">
+          <span class="slider-val" id="evMaxVal">∞</span>
         </div>
 
         <hr class="div">
@@ -587,7 +599,9 @@ function setStatus(type, msg) {
 function readFiltersObj() {
   return {
     hitPctMin: parseFloat(document.getElementById("hitPctMin").value) || 0,
+    hitPctMax: parseFloat(document.getElementById("hitPctMax").value) || 0,
     evMin:     parseInt(document.getElementById("evMin").value) || 0,
+    evMax:     parseInt(document.getElementById("evMax").value) || 0,
     sortKey:   document.querySelector('input[name="sortKey"]:checked')?.value || "ev_desc",
     topN:      parseInt(document.getElementById("topN").value) || 50,
   };
@@ -764,7 +778,9 @@ function applyAndRender() {
   const f = readFiltersObj();
   let rows = STATE.results.filter(r => {
     if (r.hit_pct < f.hitPctMin) return false;
+    if (f.hitPctMax > 0 && r.hit_pct > f.hitPctMax) return false;
     if (STATE.hasActual && f.evMin > 0 && (r.ev100 === null || r.ev100 < f.evMin)) return false;
+    if (STATE.hasActual && f.evMax > 0 && (r.ev100 === null || r.ev100 > f.evMax)) return false;
     return true;
   });
   const total = rows.length;
@@ -804,6 +820,7 @@ async function processRace(raceInfo) {
       attachUmatanOdds(entries, ao);
       STATE.hasActual = true;
       document.getElementById("evMin").disabled = false;
+      document.getElementById("evMax").disabled = false;
     }
     await sleep(300);
   } catch (_) {}
@@ -831,6 +848,7 @@ async function onFetchAndLoad() {
   STATE.hasActual = false;
   document.getElementById("fetchBtn").disabled = true;
   document.getElementById("evMin").disabled    = true;
+  document.getElementById("evMax").disabled    = true;
   document.getElementById("tableContainer").innerHTML = '<p class="empty-msg">取得中...</p>';
   document.getElementById("infoBar").innerHTML = "";
   updateVenueLegend();
