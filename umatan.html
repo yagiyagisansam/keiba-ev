@@ -197,8 +197,8 @@ hr.div{border:none;border-top:1px solid #E0E0E0;margin:8px 0;}
 
 <!-- 計算式の説明 -->
 <div class="formula-note">
-  計算式: <code>支持率 = 1/単勝オッズ × 0.80</code>
-  <code>的中確率(A→B) = 支持率A × 支持率B ÷ (1 − 支持率A)</code>
+  計算式: <code>勝率 = (1/単勝オッズ) ÷ Σ(1/全馬オッズ)</code>（正規化・全券種版と同一）
+  <code>的中確率(A→B) = 勝率A × 勝率B ÷ (1 − 勝率A)</code>
   <code>期待値 = 的中確率 × 実馬単オッズ × 100</code>
 </div>
 
@@ -263,7 +263,7 @@ hr.div{border:none;border-top:1px solid #E0E0E0;margin:8px 0;}
           <label class="radio-item"><input type="radio" name="sortKey" value="ev_desc" checked> 期待値↓</label>
           <label class="radio-item"><input type="radio" name="sortKey" value="hit_desc"> 的中率↓</label>
           <label class="radio-item"><input type="radio" name="sortKey" value="od_asc"> 理論OD↑</label>
-          <label class="radio-item"><input type="radio" name="sortKey" value="supA_desc"> 支持率A↓</label>
+          <label class="radio-item"><input type="radio" name="sortKey" value="winA_desc"> 勝率A↓</label>
         </div>
 
         <hr class="div">
@@ -348,43 +348,48 @@ async function proxyFetch(url) {
 }
 
 // ================================================================
-// ★ 計算エンジン（記事の計算式）
+// 計算エンジン（全券種版と同一ロジック: Harville + 正規化）
 // ================================================================
 /**
- * 支持率 = 1/単勝オッズ × 0.80
- * 的中確率(A→B) = 支持率A × 支持率B / (1 − 支持率A)
+ * 正規化: winProb[i] = (1/odds[i]) / Σ(1/odds[j])  → Σ(winProb) = 1.0
+ * 支持率(表示用): supportRate[i] = (1/odds[i]) × 0.80
+ * 的中確率(A→B) = winProb[A] × winProb[B] / (1 − winProb[A])  ← Harville
  * 理論オッズ = UMATAN_RR / 的中確率
  * 期待値 = 的中確率 × 実馬単オッズ × 100
  */
-function calcUmatan(horses) {
-  // 支持率を付与
-  horses.forEach(h => {
-    h.support = (1.0 / h.odds) * WIN_RR;
+function normalize(horses) {
+  const raw = horses.map(h => 1.0 / h.odds);
+  const s = raw.reduce((a, b) => a + b, 0);
+  horses.forEach((h, i) => {
+    h.winProb    = raw[i] / s;           // 正規化勝率 (Σ=1.0)
+    h.supportRate = raw[i] * WIN_RR * 100; // 支持率 %(表示用)
   });
+}
 
+function calcUmatan(horses) {
   const entries = [];
   for (let i = 0; i < horses.length; i++) {
     const A = horses[i];
-    if (A.support >= 1.0) continue; // 除算エラー防止
+    if (A.winProb >= 1.0) continue;
     for (let j = 0; j < horses.length; j++) {
       if (i === j) continue;
       const B = horses[j];
-      const prob = A.support * (B.support / (1.0 - A.support));
+      const prob = A.winProb * (B.winProb / (1.0 - A.winProb));
       if (prob <= 0 || prob >= 1) continue;
       entries.push({
-        combo:      `${A.number}→${B.number}`,
-        names:      `${A.name}→${B.name}`,
-        numA:       A.number,
-        numB:       B.number,
-        nameA:      A.name,
-        nameB:      B.name,
-        supportA:   A.support * 100,   // %表示
-        supportB:   B.support * 100,
-        oddsA:      A.odds,
-        oddsB:      B.odds,
-        prob:       prob,
-        hit_pct:    prob * 100,
-        fair_odds:  UMATAN_RR / prob,
+        combo:       `${A.number}→${B.number}`,
+        names:       `${A.name}→${B.name}`,
+        numA:        A.number,
+        numB:        B.number,
+        nameA:       A.name,
+        nameB:       B.name,
+        winRateA:    A.winProb * 100,    // 勝率% (正規化)
+        winRateB:    B.winProb * 100,
+        supportA:    A.supportRate,      // 支持率% (表示参考)
+        supportB:    B.supportRate,
+        prob:        prob,
+        hit_pct:     prob * 100,
+        fair_odds:   UMATAN_RR / prob,
         actual_odds: null,
         ev100:       null,
       });
@@ -625,7 +630,7 @@ function renderTable(rows) {
     if (sk === "ev_desc")    inner = -(r.ev100 ?? (ha ? -9999 : r.hit_pct));
     else if (sk === "hit_desc")  inner = -r.hit_pct;
     else if (sk === "od_asc")    inner = r.fair_odds;
-    else if (sk === "supA_desc") inner = -r.supportA;
+    else if (sk === "winA_desc") inner = -r.winRateA;
     return [vi === -1 ? 99 : vi, rn, inner];
   }
   const sorted = [...rows].sort((a, b) => {
@@ -659,10 +664,10 @@ function renderTable(rows) {
     }
   }
 
-  const COLS = ["kaijoba","race","combo","names","supportA","supportB","hit_pct","fair_odds","actual_odds","ev100","payout"];
+  const COLS = ["kaijoba","race","combo","names","winRateA","winRateB","hit_pct","fair_odds","actual_odds","ev100","payout"];
   const HEADS = {
     kaijoba:"開催場", race:"レース", combo:"買い目", names:"馬名(1着→2着)",
-    supportA:"支持率1着(%)", supportB:"支持率2着(%)",
+    winRateA:"勝率1着(%)", winRateB:"勝率2着(%)",
     hit_pct:"的中率(%)", fair_odds:"理論OD(倍)",
     actual_odds:"実オッズ", ev100:"期待値", payout:"払戻(円)",
   };
@@ -714,10 +719,10 @@ function renderTable(rows) {
         cell = `<span style="font-weight:bold">${r.nameA}</span>` +
                `<span style="color:${fg};padding:0 4px">→</span>` +
                `${r.nameB}`;
-      } else if (c === "supportA") {
-        cell = `${r.supportA.toFixed(1)}%`;
-      } else if (c === "supportB") {
-        cell = `${r.supportB.toFixed(1)}%`;
+      } else if (c === "winRateA") {
+        cell = `${r.winRateA.toFixed(1)}%`;
+      } else if (c === "winRateB") {
+        cell = `${r.winRateB.toFixed(1)}%`;
       } else if (c === "hit_pct") {
         cell = `${r.hit_pct.toFixed(2)}%`;
       } else if (c === "fair_odds") {
@@ -810,7 +815,23 @@ async function processRace(raceInfo) {
   if (horses.length < 2) return;
   horses.sort((a, b) => a.number - b.number);
 
-  // 馬単計算（記事の式）
+  // 正規化（全券種版と同一）
+  normalize(horses);
+
+  // JSONP APIで最新の単勝オッズに更新・再正規化（全券種版と同一フロー）
+  try {
+    const wo = await fetchWinOdds(raceInfo.raceId);
+    if (Object.keys(wo).length > 0) {
+      let updated = 0;
+      for (const h of horses) {
+        if (wo[h.number] !== undefined) { h.odds = wo[h.number]; updated++; }
+      }
+      if (updated > 0) normalize(horses);
+    }
+    await sleep(300);
+  } catch (_) {}
+
+  // 馬単計算（Harville正規化ベース）
   const entries = calcUmatan(horses);
 
   // 実馬単オッズ取得・EV付与
