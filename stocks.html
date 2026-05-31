@@ -279,6 +279,43 @@ body{
 /* ── ユーティリティ ── */
 .mt8{margin-top:8px}
 .gap8{gap:8px}
+
+/* ── 実行ステータスバー ── */
+.run-bar{
+  display:none;
+  background:#1b5e20;color:#fff;
+  padding:8px 14px;font-size:13px;
+  align-items:center;gap:10px;
+  position:sticky;top:0;z-index:50;
+}
+.run-bar.visible{display:flex}
+.run-bar .mini-spinner{
+  display:inline-block;width:14px;height:14px;
+  border:2px solid rgba(255,255,255,.4);border-top-color:#fff;
+  border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0;
+}
+
+/* ── PAT設定モーダル ── */
+.modal-bg{
+  display:none;position:fixed;inset:0;
+  background:rgba(0,0,0,.5);z-index:200;
+  align-items:center;justify-content:center;
+}
+.modal-bg.open{display:flex}
+.modal{
+  background:#fff;border-radius:12px;
+  padding:24px;width:min(90vw,380px);
+  box-shadow:0 8px 32px rgba(0,0,0,.2);
+}
+.modal h3{font-size:15px;font-weight:bold;color:#0D47A1;margin-bottom:10px}
+.modal p{font-size:12px;color:#546E7A;line-height:1.6;margin-bottom:14px}
+.modal input{
+  width:100%;border:1px solid #B0BEC5;border-radius:6px;
+  padding:0 10px;height:38px;font-size:13px;
+  font-family:inherit;margin-bottom:12px;
+}
+.modal input:focus{outline:none;border-color:#1565C0}
+.modal-btns{display:flex;gap:8px;justify-content:flex-end}
 </style>
 </head>
 <body>
@@ -299,12 +336,39 @@ body{
     </div>
   </div>
   <div class="hdr-right">
+    <button class="btn btn-outline" id="runBtn" onclick="handleRunClick()">
+      ▶ 今すぐ分析
+    </button>
     <button class="btn btn-outline" onclick="openDrawer('method')">
       ☰ 手法設定 <span id="methodCount" style="font-size:11px;opacity:.8"></span>
     </button>
     <button class="btn btn-outline" onclick="openDrawer('stock')">
       📋 銘柄管理
     </button>
+  </div>
+</div>
+
+<!-- 実行ステータスバー -->
+<div class="run-bar" id="runBar">
+  <span class="mini-spinner"></span>
+  <span id="runBarMsg">分析を実行中です（約5〜10分かかります）</span>
+</div>
+
+<!-- PAT設定モーダル -->
+<div class="modal-bg" id="patModal">
+  <div class="modal">
+    <h3>GitHub Personal Access Token</h3>
+    <p>
+      分析を手動実行するには、<strong>workflow</strong> 権限を持つ GitHub PAT が必要です。<br>
+      GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)<br>
+      → <strong>workflow</strong> にチェックして生成してください。<br><br>
+      トークンはこのブラウザにのみ保存され、外部に送信されません。
+    </p>
+    <input type="password" id="patInput" placeholder="ghp_xxxxxxxxxxxx" />
+    <div class="modal-btns">
+      <button class="btn" style="background:#ECEFF1;color:#546E7A" onclick="closePatModal()">キャンセル</button>
+      <button class="btn btn-primary" onclick="savePatAndRun()">保存して実行</button>
+    </div>
   </div>
 </div>
 
@@ -347,6 +411,10 @@ body{
   <div class="stock-note" id="stockNote">
     ⚠ 銘柄をUIで追加・削除しても、<strong>次回の分析（毎日18:00）</strong>まで結果には反映されません。
     リポジトリの <code>data/stocks.json</code> を直接編集すると即時反映されます。
+  </div>
+  <div style="padding:0 16px 8px;display:flex;justify-content:flex-end">
+    <button class="btn" style="background:none;color:#90A4AE;font-size:11px;padding:0;height:auto"
+            onclick="clearPat()">🔑 保存済みPATを削除</button>
   </div>
   <div class="stock-list-wrap" id="stockListWrap"></div>
 </div>
@@ -1463,6 +1531,140 @@ function closeDrawer(type) {
 // ═══════════════════════════════════════════════════════════════
 // 起動
 // ═══════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════
+// 手動分析実行
+// ═══════════════════════════════════════════════════════════════
+
+const GH_OWNER    = 'yagiyagisansam';
+const GH_REPO     = 'keiba-ev';
+const GH_WORKFLOW = 'stock-analysis.yml';
+
+function handleRunClick() {
+  const token = localStorage.getItem('gh_pat');
+  if (!token) {
+    document.getElementById('patModal').classList.add('open');
+    document.getElementById('patInput').value = '';
+    setTimeout(() => document.getElementById('patInput').focus(), 100);
+  } else {
+    triggerAnalysis(token);
+  }
+}
+
+function closePatModal() {
+  document.getElementById('patModal').classList.remove('open');
+}
+
+async function savePatAndRun() {
+  const token = document.getElementById('patInput').value.trim();
+  if (!token) return;
+  localStorage.setItem('gh_pat', token);
+  closePatModal();
+  triggerAnalysis(token);
+}
+
+async function triggerAnalysis(token) {
+  const btn = document.getElementById('runBtn');
+  btn.disabled = true;
+  btn.textContent = '送信中...';
+
+  try {
+    const res = await fetch(
+      `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/actions/workflows/${GH_WORKFLOW}/dispatches`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept':        'application/vnd.github.v3+json',
+          'Content-Type':  'application/json',
+        },
+        body: JSON.stringify({ ref: 'main' }),
+      }
+    );
+
+    if (res.status === 204) {
+      showRunBar('分析を実行中です（約5〜10分かかります）');
+      btn.textContent = '実行中...';
+      pollUntilDone(token);
+    } else if (res.status === 401 || res.status === 403) {
+      localStorage.removeItem('gh_pat');
+      btn.disabled = false;
+      btn.textContent = '▶ 今すぐ分析';
+      alert('認証エラー: PATを確認してください（workflow権限が必要です）');
+    } else {
+      btn.disabled = false;
+      btn.textContent = '▶ 今すぐ分析';
+      alert(`エラー ${res.status}: 実行できませんでした`);
+    }
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = '▶ 今すぐ分析';
+    alert('ネットワークエラー: ' + e.message);
+  }
+}
+
+function showRunBar(msg) {
+  const bar = document.getElementById('runBar');
+  document.getElementById('runBarMsg').textContent = msg;
+  bar.classList.add('visible');
+}
+
+function hideRunBar() {
+  document.getElementById('runBar').classList.remove('visible');
+}
+
+async function pollUntilDone(token) {
+  // 1分待ってからポーリング開始
+  await sleep(60000);
+
+  for (let i = 0; i < 20; i++) {
+    try {
+      const res = await fetch(
+        `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/actions/workflows/${GH_WORKFLOW}/runs?per_page=1`,
+        { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github.v3+json' } }
+      );
+      const data = await res.json();
+      const run  = data.workflow_runs?.[0];
+
+      if (run?.status === 'completed') {
+        if (run.conclusion === 'success') {
+          showRunBar('✅ 分析完了！データを更新します...');
+          await sleep(2000);
+          hideRunBar();
+          loadData();
+        } else {
+          showRunBar(`⚠ 分析が ${run.conclusion} で終了しました`);
+          await sleep(4000);
+          hideRunBar();
+        }
+        const btn = document.getElementById('runBtn');
+        btn.disabled = false;
+        btn.textContent = '▶ 今すぐ分析';
+        return;
+      }
+
+      const elapsed = Math.round((i + 1) * 0.5 + 1);
+      showRunBar(`分析実行中... (${elapsed}分経過)`);
+    } catch (e) {}
+
+    await sleep(30000);
+  }
+
+  // タイムアウト（10分超）
+  hideRunBar();
+  const btn = document.getElementById('runBtn');
+  btn.disabled = false;
+  btn.textContent = '▶ 今すぐ分析';
+  alert('タイムアウト: GitHub Actions の進捗は Actions タブで確認してください');
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// PAT削除ボタン（銘柄管理ドロワーのフッターに追加）
+function clearPat() {
+  localStorage.removeItem('gh_pat');
+  alert('PATを削除しました');
+}
 
 loadSettings();
 loadData();
