@@ -15,7 +15,7 @@ from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 
 
-# ─── データ取得 ────────────────────────────────────────────────────
+# ─── データ取得 ──────────────────────────────────────────
 
 def get_stock_data(code: str) -> pd.DataFrame | None:
     ticker = yf.Ticker(f"{code}.T")
@@ -120,9 +120,9 @@ def calc_indicators(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-# ─── テクニカル手法 ──────────────────────────────────────────────────
+# ─── テクニカル手法 ──────────────────────────────────────────
 
-# ── 既存手法（継続採用） ──────────────────────────────────────────────
+# ── 既存手法（継続採用） ──────────────────────────────────────────
 
 def chk_bullish_engulfing(df: pd.DataFrame) -> bool:
     """陽の包み足"""
@@ -247,7 +247,7 @@ def chk_ma75_recovery(df: pd.DataFrame) -> bool:
 
 
 def chk_ma_squeeze_breakout(df: pd.DataFrame) -> bool:
-    """MA収束後ブレイク"""
+    """MA収晵後ブレイク"""
     if len(df) < 85:
         return False
     recent = df.iloc[-12:-1]
@@ -433,7 +433,7 @@ def chk_52week_high(df: pd.DataFrame) -> bool:
 
 
 def chk_high_level_tight(df: pd.DataFrame) -> bool:
-    """高値圏コンソリデーション"""
+    """高値圈コンソリデーション"""
     if len(df) < 30:
         return False
     c = df.iloc[-1]
@@ -449,10 +449,10 @@ def chk_high_level_tight(df: pd.DataFrame) -> bool:
     return bool(near_high and tight and breaking)
 
 
-# ── A群 ──────────────────────────────────────────────────────────────
+# ── A群 ──────────────────────────────────────────────────────
 
 def chk_large_bullish_5pct(df: pd.DataFrame) -> bool:
-    """A-05: 大陽線5%超（クライマックス買い除外）"""
+    """A-05: 大陽田5%超（クライマックス買い除外）"""
     if len(df) < 66:
         return False
     p, c = df.iloc[-2], df.iloc[-1]
@@ -487,7 +487,7 @@ def chk_uwabane_large(df: pd.DataFrame) -> bool:
     return bool(c['volume'] >= vol_ma * 2.0)
 
 
-# ── B群 ──────────────────────────────────────────────────────────────
+# ── B群 ──────────────────────────────────────────────────────
 
 def chk_sankasen_akebono(df: pd.DataFrame) -> bool:
     """B-02: 三川明けの明星"""
@@ -510,14 +510,13 @@ def chk_sankasen_akebono(df: pd.DataFrame) -> bool:
 
 
 def chk_island_reversal(df: pd.DataFrame) -> bool:
-    """B-06: 離れ小島（アイランドリバーサル）"""
+    """B-06: 離れ小峳（アイランドリバーサル）"""
     if len(df) < 15:
         return False
     c    = df.iloc[-1]
     prev = df.iloc[-2]
     if c['open'] <= prev['high'] or c['close'] <= c['open']:
         return False
-    # 3〜10日前に窓開け下落でアイランドに入ったか確認
     island_found = False
     for i in range(3, 11):
         if len(df) < i + 2:
@@ -611,7 +610,7 @@ def chk_gap_vol(df: pd.DataFrame) -> bool:
     return bool(high_52w > 0 and c['close'] >= high_52w * 0.95)
 
 
-# ── C群 ──────────────────────────────────────────────────────────────
+# ── C群 ──────────────────────────────────────────────────────
 
 def chk_ma25_touch_rebound(df: pd.DataFrame) -> bool:
     """C-08: 25日線タッチ反発（MA25上向き+MA75<MA25+昨日MA25±5%+陽線+RSI35-65）"""
@@ -662,7 +661,7 @@ def chk_weinstein_stage2(df: pd.DataFrame) -> bool:
     return bool(c['volume'] >= vol_ma65 * 1.5)
 
 
-# ── D群 ──────────────────────────────────────────────────────────────
+# ── D群 ──────────────────────────────────────────────────────
 
 def chk_vol_surge_200(df: pd.DataFrame) -> bool:
     """D-02: 出来高200%急増+大陽線+52週高値付近"""
@@ -681,7 +680,7 @@ def chk_vol_surge_200(df: pd.DataFrame) -> bool:
 
 
 def chk_obv_new_high(df: pd.DataFrame) -> bool:
-    """D-06: OBV新高値（OBVが20日高値更新、価格はまだ高値更新せず）"""
+    """D-06: OBV新高値（OBVぇ20日高値更新、価格はまだ高値更新せず）"""
     if len(df) < 25:
         return False
     c = df.iloc[-1]
@@ -724,10 +723,10 @@ def chk_vol_acceleration(df: pd.DataFrame) -> bool:
     return bool(vols[0] < vols[1] < vols[2])
 
 
-# ── E群 ──────────────────────────────────────────────────────────────
+# ── E群 ──────────────────────────────────────────────────────
 
 def chk_super_tight(df: pd.DataFrame) -> bool:
-    """E-03: スーパータイト（5日値幅<3%+出来高枯渇+52週高値5%以内+MA25上）"""
+    """E-03: スーパータイト（5日値幅<3%+出来高枯溇+52週高値5%以内+MA25上）"""
     if len(df) < 30:
         return False
     c = df.iloc[-1]
@@ -749,21 +748,19 @@ def chk_super_tight(df: pd.DataFrame) -> bool:
 
 
 def chk_high_tight_flag(df: pd.DataFrame) -> bool:
-    """E-06: ハイタイトフラッグ（56日で2倍+20%以内調整1-6週+出来高枯れ→急増）"""
+    """E-06: ハイタイトフラッグ（56日で100%超+20%以内調整+出来高枯れ→急増）"""
     if len(df) < 90:
         return False
     c = df.iloc[-1]
     vol_ma = c['vol_ma25']
     if pd.isna(vol_ma) or vol_ma <= 0:
         return False
-    # 直近60日の高値を探す
     recent60   = df.iloc[-60:]
     peak_price = float(recent60['close'].max())
     peak_loc   = recent60['close'].values.argmax()
     days_since_peak = len(recent60) - 1 - peak_loc
     if days_since_peak < 7 or days_since_peak > 42:
         return False
-    # 高値前56日の起点を見つけて2倍チェック
     peak_df_pos = len(df) - 60 + peak_loc
     start_pos   = max(0, peak_df_pos - 56)
     pre_peak    = df['close'].iloc[start_pos:peak_df_pos]
@@ -772,17 +769,15 @@ def chk_high_tight_flag(df: pd.DataFrame) -> bool:
     base_price = float(pre_peak.min())
     if base_price <= 0 or peak_price / base_price < 2.0:
         return False
-    # 現在の調整幅≤20%
     if (peak_price - c['close']) / peak_price > 0.20:
         return False
-    # フラッグ期間の出来高が枯れている
     flag_vol = df['volume'].iloc[-days_since_peak - 1:-1].mean()
     if flag_vol >= vol_ma * 0.5:
         return False
     return bool(c['volume'] >= vol_ma * 1.5)
 
 
-# ── F群 ──────────────────────────────────────────────────────────────
+# ── F群 ──────────────────────────────────────────────────────
 
 def chk_v_recovery(df: pd.DataFrame) -> bool:
     """F-03: V字回復（前日5-15%下落→当日50%以上回復+出来高少+MA付近）"""
@@ -813,7 +808,7 @@ def chk_v_recovery(df: pd.DataFrame) -> bool:
 
 
 def chk_inv_triple_bottom(df: pd.DataFrame) -> bool:
-    """F-05+F-08: 逆三山（上昇3安値+各安値で出来高縮小+ネックライン突破）"""
+    """F-05+F-08: 逆三山（上昇も3安値+各安値で出来高縮小+ネックライン突破）"""
     if len(df) < 60:
         return False
     prices  = df['close'].iloc[-60:]
@@ -862,7 +857,7 @@ def chk_saucer_bottom(df: pd.DataFrame) -> bool:
     return bool(high_90d > 0 and prices[-1] >= high_90d * 0.90)
 
 
-# ── G群 ──────────────────────────────────────────────────────────────
+# ── G群 ──────────────────────────────────────────────────────
 
 def chk_ascending_triangle(df: pd.DataFrame) -> bool:
     """G-03: 上昇三角形（N=60日、水平上値+切り上がる下値+ブレイク）"""
@@ -871,7 +866,6 @@ def chk_ascending_triangle(df: pd.DataFrame) -> bool:
     segment = df.iloc[-61:-1]
     c = df.iloc[-1]
 
-    # 局所的な高値（レジスタンス候補）
     highs = []
     for i in range(2, len(segment) - 2):
         h = float(segment['high'].iloc[i])
@@ -886,7 +880,6 @@ def chk_ascending_triangle(df: pd.DataFrame) -> bool:
         return False
     resistance = mean_h
 
-    # 局所的な安値（サポート候補）
     lows_idx: list[int] = []
     lows_val: list[float] = []
     for i in range(2, len(segment) - 2):
@@ -941,7 +934,7 @@ def chk_base_breakout(df: pd.DataFrame) -> bool:
     return bool(c['close'] <= base_high * 1.05)
 
 
-# ── I群 ──────────────────────────────────────────────────────────────
+# ── I群 ──────────────────────────────────────────────────────
 
 def chk_williams_r(df: pd.DataFrame) -> bool:
     """I-10: ウィリアムズ%R（過去14日≤-80→現在≥-50+MA25上向き）"""
@@ -960,7 +953,7 @@ def chk_williams_r(df: pd.DataFrame) -> bool:
     return bool(ma25.iloc[-1] > ma25.iloc[-6])
 
 
-# ── K群 ──────────────────────────────────────────────────────────────
+# ── K群 ──────────────────────────────────────────────────────
 
 def chk_canslim(df: pd.DataFrame) -> bool:
     """K-04: CAN-SLIM複合（PO+52週新高値+出来高MA25×1.5、3条件同時）"""
@@ -1035,14 +1028,12 @@ def chk_weekly_po_first(df: pd.DataFrame) -> bool:
     if _is_po(wdf.iloc[-2]):
         return False
 
-    # 過去26週間はPOではなかった
     for i in range(n - 27, n - 1):
         if i < 0:
             continue
         if _is_po(wdf.iloc[i]):
             return False
 
-    # 27〜53週前は逆パーフェクトオーダー（下落トレンド）だった
     inverse_found = False
     for i in range(n - 54, n - 27):
         if i < 0:
@@ -1060,10 +1051,10 @@ def chk_weekly_po_first(df: pd.DataFrame) -> bool:
     return inverse_found
 
 
-# ── 追加手法 ─────────────────────────────────────────────────────────
+# ── 追加手法 ───────────────────────────────────────────────────
 
 def chk_narabiaka(df: pd.DataFrame) -> bool:
-    """上放れ並び赤（窓開け陽線+翌日同位置・同サイズの陽線）"""
+    """上放れ並び赤（窓開け陽線+翸日同位置・同サイズの陽線）"""
     if len(df) < 3:
         return False
     d0 = df.iloc[-3]
@@ -1116,12 +1107,12 @@ def chk_ppp(df: pd.DataFrame) -> bool:
     return not prev_po
 
 
-# ─── 手法定義テーブル ─────────────────────────────────────────────
+# ─── 手法定義テーブル ───────────────────────────────────────────────
 
 CHECKS: list[tuple[str, str, str, bool]] = [
     # (key, label, func, is_standalone)
 
-    # ── 既存手法（継続採用） ──────────────────────────────────────
+    # ── 既存手法（継続採用） ──────────────────────────────
     ('bullish_engulfing',    '陽の包み足',                     'chk_bullish_engulfing',    True),
     ('hammer',               '下ひげ陽線（ハンマー）',          'chk_hammer',               True),
     ('morning_star',         '朝の明星',                       'chk_morning_star',          True),
@@ -1131,7 +1122,7 @@ CHECKS: list[tuple[str, str, str, bool]] = [
     ('gc_25_75',             'GC 25/75日線',                   'chk_gc_25_75',              False),
     ('ma25_debut',           '25日線デビュー買い',              'chk_ma25_debut',            False),
     ('ma75_recovery',        '75日線回復',                     'chk_ma75_recovery',         False),
-    ('ma_squeeze_breakout',  'MA収束後ブレイク',                'chk_ma_squeeze_breakout',   True),
+    ('ma_squeeze_breakout',  'MA収晵後ブレイク',                'chk_ma_squeeze_breakout',   True),
     ('price_above_all_ma',   '株価が全MA上',                    'chk_price_above_all_ma',   False),
     ('vol_surge_150',        '出来高急増（前日比150%超）',      'chk_vol_surge_150',         False),
     ('new_high_vol',         '新高値＋出来高急増',              'chk_new_high_vol',          True),
@@ -1143,52 +1134,52 @@ CHECKS: list[tuple[str, str, str, bool]] = [
     ('flag',                 'フラッグ・ペナント',              'chk_flag',                  True),
     ('inv_head_shoulders',   '逆ヘッド&ショルダー',             'chk_inv_head_shoulders',    True),
     ('52week_high',          '52週新高値',                      'chk_52week_high',           False),
-    ('high_level_tight',     '高値圏コンソリデーション',        'chk_high_level_tight',      True),
+    ('high_level_tight',     '高値圈コンソリデーション',        'chk_high_level_tight',      True),
 
-    # ── A群（単体）──────────────────────────────────────────────
-    ('large_bullish_5pct',   '大陽線5%超（A-05）',              'chk_large_bullish_5pct',   True),
+    # ── A群（単体）────────────────────────────────────────────
+    ('large_bullish_5pct',   '大陽田5%超（A-05）',              'chk_large_bullish_5pct',   True),
     ('uwabane_large',        '上放れ陽線（A-07）',               'chk_uwabane_large',         True),
 
-    # ── B群（単体）──────────────────────────────────────────────
+    # ── B群（単体）────────────────────────────────────────────
     ('sankasen_akebono',     '三川明けの明星（B-02）',           'chk_sankasen_akebono',      True),
-    ('island_reversal',      '離れ小島（B-06）',                 'chk_island_reversal',       True),
+    ('island_reversal',      '離れ小峳（B-06）',                 'chk_island_reversal',       True),
     ('triple_bottom',        '三点底（B-08）',                   'chk_triple_bottom',         True),
     ('engulfing_vol',        '包み足＋出来高（B-10）',           'chk_engulfing_vol',         True),
     ('gap_vol',              '窓開け＋出来高（B-11）',           'chk_gap_vol',               True),
 
-    # ── C群（C-10のみ単体、他は補助）────────────────────────────
+    # ── C群（C-10のみ単体、他は補助）──────────────────────
     ('ma25_touch_rebound',   '25日線タッチ反発（C-08）',         'chk_ma25_touch_rebound',    False),
     ('weinstein_stage2',     'ワインスタインS2（C-10）',         'chk_weinstein_stage2',      True),
 
-    # ── D群（D-07のみ単体、他は補助）────────────────────────────
+    # ── D群（D-07のみ単体、他は補助）──────────────────────
     ('vol_surge_200',        '出来高200%急増（D-02）',           'chk_vol_surge_200',         False),
     ('obv_new_high',         'OBV新高値（D-06）',                'chk_obv_new_high',          False),
     ('pocket_pivot',         'ポケットピボット（D-07）',         'chk_pocket_pivot',          True),
     ('vol_acceleration',     '出来高加速（D-09）',               'chk_vol_acceleration',      False),
 
-    # ── E群（単体）──────────────────────────────────────────────
+    # ── E群（単体）────────────────────────────────────────────
     ('super_tight',          'スーパータイト（E-03）',           'chk_super_tight',           True),
     ('high_tight_flag',      'ハイタイトフラッグ（E-06）',       'chk_high_tight_flag',       True),
 
-    # ── F群（単体）──────────────────────────────────────────────
+    # ── F群（単体）────────────────────────────────────────────
     ('v_recovery',           'V字回復（F-03）',                  'chk_v_recovery',            True),
     ('inv_triple_bottom',    '逆三山（F-05+F-08）',              'chk_inv_triple_bottom',     True),
     ('saucer_bottom',        '円形底（F-06）',                   'chk_saucer_bottom',         True),
 
-    # ── G群（単体）──────────────────────────────────────────────
+    # ── G群（単体）────────────────────────────────────────────
     ('ascending_triangle',   '上昇三角形（G-03）',               'chk_ascending_triangle',    True),
     ('alltime_high',         '上場来高値更新（G-05）',           'chk_alltime_high',          True),
     ('base_breakout',        'ベース内ブレイク（G-07）',         'chk_base_breakout',         True),
 
-    # ── I群（単体）──────────────────────────────────────────────
+    # ── I群（単体）────────────────────────────────────────────
     ('williams_r',           'ウィリアムズ%R（I-10）',          'chk_williams_r',            True),
 
-    # ── K群（K-04・K-09は単体、K-07は補助）──────────────────────
+    # ── K群（K-04・K-09は単体、K-07は補助）──────────────────
     ('canslim',              'CAN-SLIM複合（K-04）',             'chk_canslim',               True),
     ('neckline_vol',         'ネックライン突破＋出来高（K-07）', 'chk_neckline_vol',          False),
     ('weekly_po_first',      '週足PO初達成（K-09）',             'chk_weekly_po_first',       True),
 
-    # ── 追加手法（単体）─────────────────────────────────────────
+    # ── 追加手法（単体）──────────────────────────────────────
     ('narabiaka',            '上放れ並び赤',                     'chk_narabiaka',             True),
     ('ppp',                  'パンパカパン（PPP）',               'chk_ppp',                   True),
 ]
@@ -1196,7 +1187,7 @@ CHECKS: list[tuple[str, str, str, bool]] = [
 _FUNC_MAP = {key: globals()[fn] for key, _, fn, _ in CHECKS}
 
 
-# ─── 単一銘柄分析 ─────────────────────────────────────────────────
+# ─── 単一銀柄分析 ─────────────────────────────────────────────
 
 def analyze_stock(code: str, name: str = '') -> dict | None:
     df = get_stock_data(code)
@@ -1224,7 +1215,6 @@ def analyze_stock(code: str, name: str = '') -> dict | None:
 
     change = (curr['close'] - prev['close']) / prev['close'] * 100 if prev['close'] > 0 else 0.0
 
-    # チャートデータ（直近90日）
     chart = []
     for dt, row in df.tail(90).iterrows():
         chart.append({
@@ -1251,7 +1241,7 @@ def analyze_stock(code: str, name: str = '') -> dict | None:
     }
 
 
-# ─── メール送信 ───────────────────────────────────────────────────
+# ─── メール送信 ───────────────────────────────────────────────
 
 def send_email(matched: list[dict], date_str: str) -> None:
     smtp_host = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
@@ -1264,12 +1254,12 @@ def send_email(matched: list[dict], date_str: str) -> None:
         print("メール設定なし。スキップ。")
         return
 
-    subject = f"【StockScan JP】テクニカル一致 {date_str}（{len(matched)}銘柄）"
+    subject = f"【StockScan JP】テクニカル一致 {date_str}（{len(matched)}銀柄）"
 
     lines = [
         "StockScan JP テクニカル分析レポート",
         f"日付: {date_str}",
-        f"一致銘柄数: {len(matched)} 件",
+        f"一致銀柄数: {len(matched)} 件",
         "=" * 50,
     ]
     for s in matched:
@@ -1285,7 +1275,7 @@ def send_email(matched: list[dict], date_str: str) -> None:
             lines += [f"   単独シグナル: {standalone}"]
         if supplem:
             lines += [f"   補助シグナル: {supplem}"]
-    lines += ["", "─" * 50, "https://yagiyagisansam.github.io/keiba-ev/stocks.html"]
+    lines += ["", "─" * 50, "https://yagiyagisansam.github.io/stocks.html"]
 
     body = "\n".join(lines)
     msg  = MIMEMultipart()
@@ -1304,7 +1294,7 @@ def send_email(matched: list[dict], date_str: str) -> None:
         print(f"✗ メール送信エラー: {e}")
 
 
-# ─── メイン ───────────────────────────────────────────────────────
+# ─── メイン ────────────────────────────────────────────────────
 
 def main() -> None:
     base  = os.path.dirname(os.path.abspath(__file__))
@@ -1347,7 +1337,7 @@ def main() -> None:
     with open(results_path, 'w', encoding='utf-8') as f:
         json.dump(output, f, ensure_ascii=False, indent=2)
 
-    print(f"\n分析完了: {len(matched)}/{len(results)} 銘柄一致")
+    print(f"\n分析完了: {len(matched)}/{len(results)} 銀柄一致")
 
     if matched:
         send_email(matched, now.strftime('%Y/%m/%d'))
