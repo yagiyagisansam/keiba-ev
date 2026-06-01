@@ -5,7 +5,6 @@ on:
     # 毎日18:00 JST (= 09:00 UTC) 平日のみ
     - cron: '0 9 * * 1-5'
   workflow_dispatch:
-    # 手動実行ボタン（GitHub Actions画面から）
 
 jobs:
   analyze:
