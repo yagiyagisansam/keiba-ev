@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>競馬EV｜独立モデル法</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;background:#ECEFF1;color:#263238;font-size:14px}
+#app{max-width:1400px;margin:0 auto}
+.kb-nav{background:#0A3270;display:flex;padding:0 14px;gap:4px}
+.kb-nav a{display:inline-flex;align-items:center;padding:9px 18px;font-size:13px;font-weight:bold;color:#90CAF9;text-decoration:none;border-radius:4px 4px 0 0;white-space:nowrap}
+.kb-nav a:hover{background:rgba(255,255,255,.1);color:#fff}
+.kb-nav a.active{background:#0D47A1;color:#fff}
+.kb-hdr{background:#0D47A1;color:#fff;padding:10px 14px;font-size:15px;font-weight:bold;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px}
+.kb-hdr .sub{font-size:12px;font-weight:normal;color:#BBDEFB}
+.wrap{padding:14px}
+.card{background:#fff;border:1px solid #CFD8DC;border-radius:8px;padding:14px;margin-bottom:14px}
+.card h2{font-size:14px;color:#0D47A1;margin-bottom:8px;border-left:4px solid #0D47A1;padding-left:8px}
+.note{font-size:12px;color:#546E7A;line-height:1.7}
+.ctrls{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end}
+.ctrl{display:flex;flex-direction:column;gap:3px}
+.ctrl label{font-size:11px;color:#546E7A;font-weight:bold}
+.ctrl input{padding:5px 7px;border:1px solid #B0BEC5;border-radius:5px;font-size:13px;width:110px}
+.btn{background:#0D47A1;color:#fff;border:none;padding:8px 16px;border-radius:6px;font-weight:bold;cursor:pointer;font-size:13px}
+.btn:hover{background:#1565C0}
+.summary{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px}
+.stat{background:#F5F7FA;border:1px solid #E0E0E0;border-radius:6px;padding:8px 12px;min-width:120px}
+.stat .k{font-size:11px;color:#78909C}
+.stat .v{font-size:18px;font-weight:bold;color:#0D47A1}
+.stat .v.pos{color:#1B5E20}.stat .v.neg{color:#B71C1C}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+th,td{border:1px solid #E0E0E0;padding:5px 7px;text-align:right;white-space:nowrap}
+th{background:#ECEFF1;color:#37474F;position:sticky;top:0}
+td.l,th.l{text-align:left}
+.tbl-wrap{max-height:70vh;overflow:auto;border:1px solid #CFD8DC;border-radius:6px}
+tr.betrow{background:#E8F5E9}
+.ev-pos{color:#1B5E20;font-weight:bold}
+.ev-neg{color:#B71C1C}
+.edge-pos{color:#1B5E20}.edge-neg{color:#B71C1C}
+.won{color:#0D47A1;font-weight:bold}
+.empty{color:#78909C;padding:24px;text-align:center}
+details.race{margin-bottom:8px;border:1px solid #E0E0E0;border-radius:6px}
+details.race>summary{cursor:pointer;padding:7px 10px;background:#F5F7FA;font-weight:bold;font-size:13px;list-style:none;display:flex;justify-content:space-between;gap:8px}
+details.race[open]>summary{background:#E3F2FD}
+</style>
+</head>
+<body>
+<div id="app">
+
+<div class="kb-nav">
+  <a href="index.html">🏇 全券種</a>
+  <a href="umatan.html">🎯 馬単特化</a>
+  <a href="ev2.html" class="active">🧮 独立モデル法</a>
+</div>
+
+<div class="kb-hdr">
+  <span>🧮 二段階モデル EV（回収率100%超を狙う手法）</span>
+  <span id="status" class="sub">予測JSON未読込</span>
+</div>
+
+<div class="wrap">
+
+  <div class="card">
+    <h2>この手法について</h2>
+    <p class="note">
+      従来タブは <b>勝率＝単勝オッズの逆数</b> を使うため EV は必ず <b>(1−控除率)&lt;1.0</b> に固定されます。
+      本タブは <b>市場オッズから独立した勝率</b>（斤量・馬体重・騎手・過去走指標などの
+      ファンダメンタル特徴量による Stage1 モデル → 較正 → 市場オッズと結合する Stage2）を使い、
+      市場が過小評価した馬で <b>p&gt;q</b>（予測勝率＞市場勝率）となる箇所を <b>EV = p × オッズ &gt; 1</b> として拾います。
+      予測は Python 側（<code>evmodel.pipeline</code>）で学習・walk-forward 検証して書き出した
+      <code>ev2_predictions.json</code> を読み込みます。理論と根拠は <code>docs/EV_METHODOLOGY.md</code>。
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>予測データ読込・設定</h2>
+    <div class="ctrls">
+      <div class="ctrl"><label>予測JSON</label><input type="file" id="file" accept=".json"></div>
+      <div class="ctrl"><label>EV下限 (1+margin)</label><input type="number" id="margin" value="0.05" step="0.01" min="0"></div>
+      <div class="ctrl"><label>分数Kelly係数</label><input type="number" id="kelly" value="0.5" step="0.05" min="0" max="1"></div>
+      <div class="ctrl"><label>1点上限(資金比)</label><input type="number" id="cap" value="0.05" step="0.01" min="0" max="1"></div>
+      <div class="ctrl"><label>資金(円)</label><input type="number" id="bank" value="100000" step="1000"></div>
+      <button class="btn" onclick="render()">▶ 計算</button>
+    </div>
+    <p class="note" style="margin-top:8px">
+      デモ用に合成データのサンプルを読み込むこともできます：
+      <button class="btn" style="padding:4px 10px" onclick="loadDemo()">合成デモを読込</button>
+    </p>
+  </div>
+
+  <div class="card" id="summaryCard" style="display:none">
+    <h2>サマリー（読み込んだ予測全体）</h2>
+    <div class="summary" id="summary"></div>
+    <p class="note" id="verdict" style="margin-top:8px"></p>
+  </div>
+
+  <div id="out"><div class="empty">予測JSONを読み込むと、EV&gt;1 の買い目とKelIy配分が表示されます。</div></div>
+
+</div><!-- /wrap -->
+</div><!-- /app -->
+
+<script>
+let DATA = null;
+
+document.getElementById('file').addEventListener('change', function(ev){
+  const f = ev.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = () => { try{ DATA = JSON.parse(r.result); status(`読込: ${Object.keys(DATA.races||{}).length}レース`); render(); }
+                     catch(e){ status('JSON解析エラー: '+e.message); } };
+  r.readAsText(f);
+});
+
+function status(s){ document.getElementById('status').textContent = s; }
+
+function kellyFraction(p, odds){
+  const b = odds - 1; if(b<=0) return 0;
+  const f = (p*odds - 1)/b; return Math.max(0, f);
+}
+
+function render(){
+  if(!DATA || !DATA.races){ return; }
+  const margin = parseFloat(document.getElementById('margin').value)||0;
+  const kelly  = parseFloat(document.getElementById('kelly').value)||0;
+  const cap    = parseFloat(document.getElementById('cap').value)||0.05;
+  const bank   = parseFloat(document.getElementById('bank').value)||0;
+  const rids = Object.keys(DATA.races).sort();
+
+  let betN=0, stakeU=0, retU=0, wins=0, hasLabels=false;
+  const raceBlocks=[];
+  for(const rid of rids){
+    const rc = DATA.races[rid];
+    const horses = rc.horses.map(h=>({...h, ev: h.p*h.odds, edge: h.p-(h.q||0)}));
+    horses.sort((a,b)=>b.ev-a.ev);
+    const bets = horses.filter(h=>h.ev > 1+margin);
+    if(!bets.length) { raceBlocks.push({rid,rc,horses,bets}); continue; }
+    for(const h of bets){
+      const stake = Math.min(cap, kelly*kellyFraction(h.p,h.odds));
+      h.stake = stake; betN++; stakeU += stake;
+      if(h.won!==undefined){ hasLabels=true; if(h.won){ retU += stake*h.odds; wins++; } }
+    }
+    raceBlocks.push({rid,rc,horses,bets});
+  }
+
+  // summary
+  const sc = document.getElementById('summaryCard'); sc.style.display='block';
+  const roi = stakeU>0 ? retU/stakeU : 0;
+  const el = document.getElementById('summary');
+  el.innerHTML = '';
+  const add=(k,v,cls)=>{el.insertAdjacentHTML('beforeend',`<div class="stat"><div class="k">${k}</div><div class="v ${cls||''}">${v}</div></div>`)};
+  add('対象レース', rids.length);
+  add('EV>閾値の買い目', betN);
+  if(hasLabels){
+    add('的中', wins);
+    add('均等ROI', (roi*100).toFixed(1)+'%', roi>=1?'pos':'neg');
+    const profit = bank*(retU - stakeU) / (stakeU||1); // 資金比×資金の近似は省略、単純表示
+  }
+  add('平均エッジ p−q', avgEdge(raceBlocks).toFixed(4));
+  const v = document.getElementById('verdict');
+  if(hasLabels){
+    v.innerHTML = roi>=1
+      ? `この予測セットでは均等買い ROI が <b>${(roi*100).toFixed(1)}%</b>（100%超）。`
+        + ` ただし単一セットの結果であり、walk-forward の全fold・信頼区間（Python側 <code>pipeline</code> 出力）で安定して控除率を超えるか要確認。`
+      : `この予測セットの ROI は <b>${(roi*100).toFixed(1)}%</b> で控除率の壁を破れていません。特徴量の強化が必要です。`;
+  } else {
+    v.textContent = '（このJSONには勝敗ラベルが無いため実績ROIは表示できません。予測EVの表示のみ）';
+  }
+
+  // race table
+  const out = document.getElementById('out'); out.innerHTML='';
+  const withBets = raceBlocks.filter(b=>b.bets.length);
+  if(!withBets.length){ out.innerHTML='<div class="empty">EV>閾値の買い目はありません（margin を下げると増えます）。</div>'; return; }
+  for(const b of withBets){
+    const det = document.createElement('details'); det.className='race'; det.open = withBets.length<=8;
+    const nbet=b.bets.length;
+    det.innerHTML = `<summary><span>${b.rid}　(${b.rc.date||''})</span><span>買い目 ${nbet}点</span></summary>`;
+    let h = '<div class="tbl-wrap"><table><thead><tr>'
+      + '<th>馬番</th><th class="l">馬名</th><th>予測p</th><th>市場q</th><th>エッジ</th><th>オッズ</th><th>EV</th><th>Kelly比</th>'
+      + (b.horses[0].won!==undefined?'<th>結果</th>':'') + '</tr></thead><tbody>';
+    for(const x of b.horses){
+      const bet = x.ev>1+margin;
+      const kf = (bet? kelly*kellyFraction(x.p,x.odds):0);
+      h += `<tr class="${bet?'betrow':''}">`
+        + `<td>${x.num}</td><td class="l">${x.name||''}</td>`
+        + `<td>${(x.p*100).toFixed(1)}%</td>`
+        + `<td>${x.q!=null?(x.q*100).toFixed(1)+'%':'-'}</td>`
+        + `<td class="${x.edge>=0?'edge-pos':'edge-neg'}">${(x.edge*100).toFixed(1)}pt</td>`
+        + `<td>${x.odds.toFixed(1)}</td>`
+        + `<td class="${x.ev>=1?'ev-pos':'ev-neg'}">${x.ev.toFixed(2)}</td>`
+        + `<td>${(kf*100).toFixed(1)}%</td>`
+        + (x.won!==undefined?`<td class="${x.won?'won':''}">${x.won?'的中':'-'}</td>`:'')
+        + '</tr>';
+    }
+    h += '</tbody></table></div>';
+    det.insertAdjacentHTML('beforeend', h);
+    out.appendChild(det);
+  }
+}
+
+function avgEdge(blocks){
+  let s=0,n=0;
+  for(const b of blocks) for(const h of b.bets){ s+=(h.p-(h.q||0)); n++; }
+  return n? s/n : 0;
+}
+
+// 合成デモ: 市場が誤価格・独立モデルが当てるサンプルを生成
+function loadDemo(){
+  function sm(xs){const m=Math.max(...xs);const e=xs.map(x=>Math.exp(x-m));const z=e.reduce((a,b)=>a+b);return e.map(v=>v/z);}
+  let seed=12345; const rnd=()=>{seed=(1103515245*seed+12345)&0x7fffffff; return seed/0x7fffffff;};
+  const g=()=>{let s=0;for(let i=0;i<6;i++)s+=rnd();return (s-3)/1.0;};
+  const races={};
+  for(let r=0;r<40;r++){
+    const k=8+Math.floor(rnd()*6); const st=Array.from({length:k},()=>g());
+    const tp=sm(st); let acc=0,win=k-1,u=rnd();
+    for(let i=0;i<k;i++){acc+=tp[i]; if(u<=acc){win=i;break;}}
+    const mkt=sm(st.map(s=>s+g()*0.6)); const odds=mkt.map(q=>Math.round((0.8/Math.max(q,1e-6))*10)/10);
+    const p=sm(st.map(s=>s*0.9)); // 独立モデルの予測(真に近い)
+    const horses=[];
+    for(let i=0;i<k;i++) horses.push({num:i+1,name:'馬'+(i+1),p:Math.round(p[i]*1e4)/1e4,q:Math.round(mkt[i]*1e4)/1e4,odds:odds[i],won:i===win});
+    races['DEMO'+String(r).padStart(3,'0')]={date:'合成',horses};
+  }
+  DATA={schema:'ev2-predictions/1',races}; status('合成デモ '+Object.keys(races).length+'レース'); render();
+}
+</script>
+</body>
+</html>

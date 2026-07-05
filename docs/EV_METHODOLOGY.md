@@ -236,15 +236,20 @@ netkeiba の結果・出馬表・過去走から取得可能で、**発走前に
 
 ## 9. 実装ロードマップ（既存コードへの接続）
 
-| 段階 | 作業 | 既存資産 |
-|---|---|---|
-| 1 | `entries` に斤量・馬体重・騎手・血統等を追加取得（`parse_result.py`/新 parser 拡張、schema_version 上げ） | `scraper/`, `docs/DATABASE.md` |
-| 2 | 時系列リーク防止の特徴量生成モジュール（過去走のみ集計） | 新規 `features.py` |
-| 3 | Stage 1 モデル（まず LightGBM lambdarank、比較用に条件付きロジット） | 新規 `model.py` |
-| 4 | isotonic 較正 + reliability/ECE レポート | backtest の EV バケットを流用 |
-| 5 | Stage 2 結合（π^α·q^β の α,β 最尤）と ΔR² 計測 | `win_probs()` を `combined_probs()` に差し替え |
-| 6 | `backtest_example.py` の `pm=win_probs(...)` を結合確率に置換、walk-forward 化 | `harville()`/`calc_bets()` 流用 |
-| 7 | 分数 Kelly ステーキング + 上限、OOS 回収率と CI を出力 | 新規 `staking.py` |
+| 段階 | 作業 | 実装 | 状態 |
+|---|---|---|---|
+| 1 | `entries` に斤量・馬体重・騎手・血統ID・上がり等を追加取得（結果ページから、追加リクエスト不要）＋旧DBへ加算収集 | `scraper/parse_result.py`・`db.py`・`ingest.py --refresh-features` | ✅ 実装・テスト済 |
+| 2 | 時系列リーク防止の特徴量生成（過去走のみ集計） | `evmodel/features.py` | ✅ |
+| 3 | Stage 1 モデル（条件付きロジット。将来 LightGBM 差し替え可） | `evmodel/condlogit.py` | ✅ |
+| 4 | isotonic 較正 | `evmodel/condlogit.isotonic_*` | ✅ |
+| 5 | Stage 2 結合（π^α·q^β の α,β 最尤）と ΔR² 計測 | `evmodel/model.py` | ✅ |
+| 6 | 結合確率での walk-forward バックテスト | `evmodel/backtest.py`・`evmodel/pipeline.py` | ✅ |
+| 7 | 分数 Kelly ステーキング + 上限、OOS 回収率と CI | `evmodel/backtest.py`（`kelly_fraction`/`bootstrap_ci`） | ✅ |
+| 8 | 別タブ UI（予測JSONを読み EV>1 とKelly配分を表示） | `ev2.html`（🧮 独立モデル法） | ✅ |
+| — | 手法の妥当性検証（効率市場で偽陽性なし・非効率市場でEV>1） | `evmodel/selftest.py` | ✅ 合成データで確認済 |
+
+実行手順・出力の読み方は `evmodel/README.md` を参照。**実データでの本番検証は10年分の収集・
+`--refresh-features` 完了後**（データが一部でも揃えば `pipeline` は順次実行可能）。
 
 **判定基準（撤退ライン）：** Stage 2 の α が有意に 0 でなく、walk-forward の OOS で
 較正済み EV 帯が安定して控除率 + margin を超える帯を持つこと。満たさなければ、その特徴量セットでは
