@@ -26,6 +26,8 @@ def main(argv=None):
     ap.add_argument("--folds", type=int, default=4)
     ap.add_argument("--margin", type=float, default=0.0, help="EV 閾値 (EV>1+margin で購入)")
     ap.add_argument("--kelly", type=float, default=0.5, help="分数 Kelly 係数")
+    ap.add_argument("--export-races", type=int, default=300,
+                    help="ev2_predictions.json に載せる直近レース数の上限(統計は全OOSで計算)")
     args = ap.parse_args(argv)
 
     races = load_races(args.db, limit_year=args.year)
@@ -64,20 +66,25 @@ def main(argv=None):
               "有意なエッジ無し(控除率の壁を破れず)"
     print(f"  判定: {verdict}")
 
-    export_predictions(args.out, preds_races(races, preds))
-    print(f"\n[pipeline] 予測を {args.out} に書き出しました → ev2.html で読み込み可")
+    export_predictions(args.out, preds_races(races, preds, limit=args.export_races))
+    print(f"\n[pipeline] 予測(直近{args.export_races}レース上限)を {args.out} に書き出しました")
     return 0
 
 
-def preds_races(all_races, oos_preds):
-    """OOS 予測が付いたレースだけを ev2.html 用の構造にまとめる。"""
+def preds_races(all_races, oos_preds, limit=None):
+    """OOS 予測が付いたレースだけを ev2.html 用の構造にまとめる(直近 limit 件に制限可)。"""
     # oos_preds は per-horse フラット。race_id ごとに束ね直す。
     by_race = {}
     for p in oos_preds:
         by_race.setdefault(p["race_id"], []).append(p)
+    keep = set(by_race)
+    if limit and len(keep) > limit:
+        keep = set(sorted(by_race)[-limit:])  # race_id 昇順=時系列、直近を残す
     races_by_id = {r["race_id"]: r for r in all_races}
     result = {}
     for rid, phorses in by_race.items():
+        if rid not in keep:
+            continue
         r = races_by_id.get(rid)
         if not r:
             continue
