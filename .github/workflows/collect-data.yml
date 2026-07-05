@@ -4,6 +4,10 @@
 # - schedule: 毎日2回、COLLECT_YEARS(リポジトリ変数, 例 "2026,2025")の
 #   未収集レースを時間予算内で自動バックフィル
 #
+# 所要時間の目安(workers=4, sleep=0.5): 1レース≈1.8秒 → 1年≈2時間。
+# 年別の手動dispatchは並列実行できる(concurrency group が対象別)が、
+# netkeiba への集約レートが跳ね上がるため同時2〜3本まで
+#
 # GitHub Release (data-YYYY) を実行間の永続ストレージとして使う:
 #   download keiba_YYYY.db.gz → 続きから ingest → validate → upload --clobber
 name: レースデータ収集
@@ -23,6 +27,12 @@ on:
       max_minutes:
         description: '1年あたりの時間予算(分)'
         default: '150'
+      workers:
+        description: '並列ワーカー数 (1=直列)'
+        default: '4'
+      sleep:
+        description: 'ワーカー毎のリクエスト間ウェイト秒'
+        default: '0.5'
   schedule:
     - cron: '0 18 * * *'   # JST 03:00 (深夜帯メイン)
     - cron: '0 13 * * *'   # JST 22:00 (開催日の結果確定後)
@@ -30,9 +40,10 @@ on:
 permissions:
   contents: write   # Release の作成・アップロードに必要
 
+# 同一対象の二重実行を防ぐ。異なる年の dispatch は並列可
 concurrency:
-  group: collect-data
-  cancel-in-progress: false   # 二重実行で netkeiba を叩かない
+  group: collect-data-${{ inputs.date || inputs.year || 'cron' }}
+  cancel-in-progress: false
 
 jobs:
   collect:
@@ -73,6 +84,8 @@ jobs:
           IN_MONTH: ${{ inputs.month }}
           IN_DATE: ${{ inputs.date }}
           BUDGET: ${{ inputs.max_minutes || '150' }}
+          WORKERS: ${{ inputs.workers || '4' }}
+          SLEEP: ${{ inputs.sleep || '0.5' }}
           PROXY_URL: ${{ secrets.PROXY_URL }}   # netkeiba がランナー IP を弾く場合のみ設定
         run: |
           set -uo pipefail
@@ -92,7 +105,8 @@ jobs:
               && gunzip -f "${DB}.gz" || echo "既存 DB なし。新規作成します"
 
             # 取り込み(時間予算つき)。exit 2 = ブロック疑い
-            ARGS=(--db "$DB" --max-minutes "$BUDGET" --progress-json "progress_${Y}.json")
+            ARGS=(--db "$DB" --max-minutes "$BUDGET" --workers "$WORKERS" --sleep "$SLEEP" \
+                  --progress-json "progress_${Y}.json")
             if [ -n "$IN_DATE" ]; then
               ARGS+=(--date "$IN_DATE")
             elif [ -n "$IN_MONTH" ]; then
