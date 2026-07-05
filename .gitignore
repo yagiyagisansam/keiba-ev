@@ -1,0 +1,9 @@
+# 収集データ(GitHub Release で管理、リポジトリにはコミットしない)
+*.db
+*.db.gz
+*.db-wal
+*.db-shm
+progress_*.json
+
+__pycache__/
+*.pyc

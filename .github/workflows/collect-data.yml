@@ -1,0 +1,137 @@
+# レースデータ収集ワークフロー
+#
+# - workflow_dispatch: 単日スモークテスト(date)や特定年月の取り込みを手動実行
+# - schedule: 毎日2回、COLLECT_YEARS(リポジトリ変数, 例 "2026,2025")の
+#   未収集レースを時間予算内で自動バックフィル
+#
+# 所要時間の目安(workers=4, sleep=0.5): 1レース≈1.8秒 → 1年≈2時間。
+# 年別の手動dispatchは並列実行できる(concurrency group が対象別)が、
+# netkeiba への集約レートが跳ね上がるため同時2〜3本まで
+#
+# GitHub Release (data-YYYY) を実行間の永続ストレージとして使う:
+#   download keiba_YYYY.db.gz → 続きから ingest → validate → upload --clobber
+name: レースデータ収集
+
+on:
+  workflow_dispatch:
+    inputs:
+      year:
+        description: '対象年 (例 2025)'
+        default: ''
+      month:
+        description: '対象月 (1-12, 年全体なら空)'
+        default: ''
+      date:
+        description: '単日スモークテスト YYYYMMDD (指定時は year/month より優先)'
+        default: ''
+      max_minutes:
+        description: '1年あたりの時間予算(分)'
+        default: '150'
+      workers:
+        description: '並列ワーカー数 (1=直列)'
+        default: '4'
+      sleep:
+        description: 'ワーカー毎のリクエスト間ウェイト秒'
+        default: '0.5'
+  schedule:
+    - cron: '0 18 * * *'   # JST 03:00 (深夜帯メイン)
+    - cron: '0 13 * * *'   # JST 22:00 (開催日の結果確定後)
+
+permissions:
+  contents: write   # Release の作成・アップロードに必要
+
+# 同一対象の二重実行を防ぐ。異なる年の dispatch は並列可
+concurrency:
+  group: collect-data-${{ inputs.date || inputs.year || 'cron' }}
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 依存関係インストール
+        run: pip install -r requirements.txt
+
+      - name: パーサ単体テスト
+        run: python -m unittest discover tests
+
+      - name: 収集対象の決定
+        id: plan
+        env:
+          IN_YEAR: ${{ inputs.year }}
+          IN_DATE: ${{ inputs.date }}
+          COLLECT_YEARS: ${{ vars.COLLECT_YEARS }}
+        run: |
+          if [ -n "$IN_DATE" ]; then
+            echo "years=${IN_DATE:0:4}" >> "$GITHUB_OUTPUT"
+          elif [ -n "$IN_YEAR" ]; then
+            echo "years=$IN_YEAR" >> "$GITHUB_OUTPUT"
+          else
+            # cron: リポジトリ変数 COLLECT_YEARS (カンマ区切り)。未設定なら現在年
+            echo "years=${COLLECT_YEARS:-$(date +%Y)}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 取得 → 取り込み → 検証 → アップロード
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IN_MONTH: ${{ inputs.month }}
+          IN_DATE: ${{ inputs.date }}
+          BUDGET: ${{ inputs.max_minutes || '150' }}
+          WORKERS: ${{ inputs.workers || '4' }}
+          SLEEP: ${{ inputs.sleep || '0.5' }}
+          PROXY_URL: ${{ secrets.PROXY_URL }}   # netkeiba がランナー IP を弾く場合のみ設定
+        run: |
+          set -uo pipefail
+          FINAL_EXIT=0
+          IFS=',' read -ra YEARS <<< "${{ steps.plan.outputs.years }}"
+          for Y in "${YEARS[@]}"; do
+            Y="$(echo "$Y" | tr -d ' ')"
+            DB="keiba_${Y}.db"
+            TAG="data-${Y}"
+            echo "::group::${Y}年"
+
+            # Release を実行間ストレージとして利用
+            gh release view "$TAG" >/dev/null 2>&1 \
+              || gh release create "$TAG" --title "Race data $Y" \
+                   --notes "JRA レースデータ (自動収集)。keiba_${Y}.db.gz を展開して利用。"
+            gh release download "$TAG" --pattern "${DB}.gz" --output "${DB}.gz" 2>/dev/null \
+              && gunzip -f "${DB}.gz" || echo "既存 DB なし。新規作成します"
+
+            # 取り込み(時間予算つき)。exit 2 = ブロック疑い
+            ARGS=(--db "$DB" --max-minutes "$BUDGET" --workers "$WORKERS" --sleep "$SLEEP" \
+                  --progress-json "progress_${Y}.json")
+            if [ -n "$IN_DATE" ]; then
+              ARGS+=(--date "$IN_DATE")
+            elif [ -n "$IN_MONTH" ]; then
+              ARGS+=(--year "$Y" --month "$IN_MONTH")
+            else
+              ARGS+=(--year "$Y")
+            fi
+            set +e
+            python -m scraper.ingest "${ARGS[@]}"
+            INGEST_EXIT=$?
+            set -e
+
+            python -m scraper.validate --db "$DB"
+
+            # コンパクト化して Release に反映(途中経過でも毎回アップロード)
+            python -c "import sqlite3; c = sqlite3.connect('$DB'); \
+              c.execute('PRAGMA journal_mode=DELETE'); c.execute('VACUUM'); c.close()"
+            gzip -9 -c "$DB" > "${DB}.gz"
+            gh release upload "$TAG" "${DB}.gz" "progress_${Y}.json" --clobber
+            echo "::endgroup::"
+
+            if [ "$INGEST_EXIT" -ne 0 ]; then
+              echo "::error::${Y}年の取り込みが exit=${INGEST_EXIT} で中断 (2=ブロック疑い)"
+              FINAL_EXIT=$INGEST_EXIT
+              break   # ブロック疑いなら他の年も叩かない
+            fi
+          done
+          exit $FINAL_EXIT
