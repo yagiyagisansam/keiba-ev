@@ -1,0 +1,128 @@
+# 独立モデル法(二段階EV)の学習・予測生成ワークフロー
+#
+# スマホ完結のための「サーバ側の重い処理」を担う。ここで:
+#   1. data-YYYY Release から年別 DB を取得・統合
+#   2. evmodel.pipeline で walk-forward 検証 → ev2_predictions.json(検証閲覧用)
+#   3. evmodel.serve で対象開催日の各馬 独立勝率π → ev2_upcoming.json(ライブ用)
+#   4. 生成物を main にコミット → GitHub Pages が再配信 → ev2.html が自動読込
+#
+# 使い方(スマホの GitHub アプリ/Webから):
+#   Actions → モデル学習・π生成 → Run workflow
+#     years        : 学習に使う年(カンマ区切り, 空なら COLLECT_YEARS か現在年)
+#     dates        : ライブπを出す開催日 YYYYMMDD(カンマ区切り, 空ならπ生成スキップ)
+#     refresh_features: true で結果ページ再取得し特徴量を埋める(旧DB用, 時間かかる)
+name: モデル学習・π生成
+
+on:
+  workflow_dispatch:
+    inputs:
+      years:
+        description: '学習に使う年 (カンマ区切り, 例 2016,2017,...)'
+        default: ''
+      dates:
+        description: 'ライブπ対象の開催日 YYYYMMDD (カンマ区切り, 空ならスキップ)'
+        default: ''
+      min_train:
+        description: 'walk-forward 最小学習レース数'
+        default: '500'
+      refresh_features:
+        description: '結果ページ再取得で特徴量を埋める (true/false)'
+        default: 'false'
+  schedule:
+    - cron: '0 20 * * 5'   # 毎週金曜 JST 05:00: 週末開催に備えてモデル更新
+
+permissions:
+  contents: write
+
+concurrency:
+  group: train-model
+  cancel-in-progress: false
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 依存関係インストール
+        run: pip install -r requirements.txt
+
+      - name: 単体テスト
+        run: python -m unittest discover tests
+
+      - name: 学習対象年の決定
+        id: plan
+        env:
+          IN_YEARS: ${{ inputs.years }}
+          COLLECT_YEARS: ${{ vars.COLLECT_YEARS }}
+        run: |
+          YEARS="${IN_YEARS:-${COLLECT_YEARS:-$(date +%Y)}}"
+          echo "years=$YEARS" >> "$GITHUB_OUTPUT"
+          echo "対象年: $YEARS"
+
+      - name: 年別DB取得 → 統合 → 学習 → π生成 → 公開
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IN_DATES: ${{ inputs.dates }}
+          MIN_TRAIN: ${{ inputs.min_train || '500' }}
+          REFRESH: ${{ inputs.refresh_features || 'false' }}
+          PROXY_URL: ${{ secrets.PROXY_URL }}   # netkeiba が弾く場合のみ
+        run: |
+          set -uo pipefail
+          IFS=',' read -ra YEARS <<< "${{ steps.plan.outputs.years }}"
+          SRCS=()
+          for Y in "${YEARS[@]}"; do
+            Y="$(echo "$Y" | tr -d ' ')"; [ -z "$Y" ] && continue
+            DB="keiba_${Y}.db"; TAG="data-${Y}"
+            if gh release download "$TAG" --pattern "${DB}.gz" --output "${DB}.gz" 2>/dev/null; then
+              gunzip -f "${DB}.gz"
+              if [ "$REFRESH" = "true" ]; then
+                echo "::group::${Y} 特徴量バックフィル"
+                python -m scraper.ingest --db "$DB" --year "$Y" --refresh-features \
+                  --max-minutes 60 --workers 4 --sleep 0.5 || true
+                echo "::endgroup::"
+              fi
+              SRCS+=("$DB")
+            else
+              echo "::warning::${TAG} が無いためスキップ"
+            fi
+          done
+
+          if [ "${#SRCS[@]}" -eq 0 ]; then
+            echo "::error::学習に使える DB がありません(先に レースデータ収集 を実行)"; exit 1
+          fi
+
+          python -m evmodel.mergedb --out keiba_all.db "${SRCS[@]}"
+
+          # 検証用予測(walk-forward)
+          python -m evmodel.pipeline --db keiba_all.db --out ev2_predictions.json \
+            --min-train "$MIN_TRAIN" || echo "pipeline 警告"
+
+          # ライブπ(対象日が指定されていれば)
+          if [ -n "$IN_DATES" ]; then
+            IFS=',' read -ra DATES <<< "$IN_DATES"
+            ARGS=()
+            for D in "${DATES[@]}"; do D="$(echo "$D" | tr -d ' ')"; [ -n "$D" ] && ARGS+=(--date "$D"); done
+            # 複数日指定時は最後の --date が有効。1日ずつ出したい場合はファイル名を分ける運用に
+            python -m evmodel.serve --db keiba_all.db "${ARGS[@]}" --out ev2_upcoming.json \
+              || echo "serve 警告(出馬表未公開などはスキップ)"
+          fi
+
+          # main へ公開(Pages が再配信 → ev2.html が自動読込)
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f ev2_predictions.json ev2_upcoming.json 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "変更なし"
+          else
+            git commit -m "chore: 独立モデル法の予測データを更新"
+            git push origin HEAD:main
+          fi

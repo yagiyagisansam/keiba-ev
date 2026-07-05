@@ -251,6 +251,20 @@ netkeiba の結果・出馬表・過去走から取得可能で、**発走前に
 実行手順・出力の読み方は `evmodel/README.md` を参照。**実データでの本番検証は10年分の収集・
 `--refresh-features` 完了後**（データが一部でも揃えば `pipeline` は順次実行可能）。
 
+### スマートフォン完結アーキテクチャ
+
+端末では重い学習を走らせない。**GitHub Actions が学習し、GitHub Pages が配信し、ブラウザは軽い計算だけ**行う：
+
+- **収集**: Actions「レースデータ収集」（スマホの GitHub から起動）→ `data-YYYY` Release にDB蓄積
+- **学習**: Actions「モデル学習・π生成」（`.github/workflows/train-model.yml`）→ 年別DB統合→`pipeline`→`serve`→
+  `ev2_predictions.json`・`ev2_upcoming.json` を main にコミット→Pages 再配信
+- **利用**: `ev2.html`（🧮 独立モデル法）を開くだけ。
+  - **📡 ライブ**: 発走前にブラウザが単勝オッズ q だけ取得し、CI が用意した独立勝率 π と
+    `p ∝ π^α·q^β`、`EV = p × odds` を計算（π はオッズ非依存なので事前計算できる）
+  - **📊 検証**: walk-forward 予測（ROI・CI）を閲覧
+
+これで PC 不要。ブラウザ（GitHub と Pages）だけで収集起動→学習起動→ライブ判定まで完結する。
+
 **判定基準（撤退ライン）：** Stage 2 の α が有意に 0 でなく、walk-forward の OOS で
 較正済み EV 帯が安定して控除率 + margin を超える帯を持つこと。満たさなければ、その特徴量セットでは
 EV > 1.0 は成立しないと結論し、特徴量を強化して再挑戦する（過剰適合で無理に閾値を下げない）。

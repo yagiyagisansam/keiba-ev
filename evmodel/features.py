@@ -25,8 +25,45 @@ def _f(v, default=0.0):
     return float(v) if v is not None else default
 
 
-def load_races(db_path, limit_year=None):
-    """DB から (race meta + entries) を開催日昇順で読み、特徴量付きレース列を返す。"""
+def _rate(d, key):
+    return (d[key] / d["n"]) if d and d["n"] > 0 else None
+
+
+def compute_feat(pre, hs, js, ts, field, race_date):
+    """1頭の Stage1 特徴量 dict を組む(学習・ライブ採点で共通)。
+
+    pre: {kinryo, horse_weight, weight_diff, age, sex, horse_num} の発走前確定情報
+    hs/js/ts: そのレース時点までの馬・騎手・調教師の累積成績(無ければ None)
+    """
+    n_past = hs["n"] if hs else 0
+    days_since = _date_diff(hs["last_date"], race_date) if hs and hs.get("last_date") else None
+    return {
+        "kinryo": _f(pre.get("kinryo"), 55.0),
+        "horse_weight": _f(pre.get("horse_weight"), 470.0),
+        "weight_diff": _f(pre.get("weight_diff"), 0.0),
+        "age": _f(pre.get("age"), 4.0),
+        "is_female": 1.0 if (pre.get("sex") in ("牝",)) else 0.0,
+        "field_size": float(field),
+        "post_rel": (pre.get("horse_num") or 1) / max(field, 1),
+        "is_debut": 1.0 if n_past == 0 else 0.0,
+        "n_past": float(n_past),
+        "win_rate": _f(_rate(hs, "win"), 0.08),
+        "place_rate": _f(_rate(hs, "place"), 0.25),
+        "avg_finish_rel": _f((hs["fin_sum"] / hs["n"]) if hs and hs["n"] else None, 8.0),
+        "best_agari": _f(hs.get("best_agari") if hs else None, 36.0),
+        "avg_speed": _f(hs.get("speed_sum") / hs["n"] if hs and hs["n"] else None, 16.0),
+        "days_since_last": _f(days_since, 60.0),
+        "jockey_win_rate": _f(_rate(js, "win"), 0.06),
+        "trainer_win_rate": _f(_rate(ts, "win"), 0.06),
+    }
+
+
+def load_races(db_path, limit_year=None, return_stats=False):
+    """DB から (race meta + entries) を開催日昇順で読み、特徴量付きレース列を返す。
+
+    return_stats=True のとき、全履歴を反映し切った後の累積成績
+    (horse_stats, jockey_stats, trainer_stats) も返す(ライブ採点 evmodel.serve 用)。
+    """
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     q = (
@@ -60,9 +97,6 @@ def load_races(db_path, limit_year=None):
     jockey_stats = {}  # jockey -> {"n","win"}
     trainer_stats = {}
 
-    def rate(d, key):
-        return (d[key] / d["n"]) if d and d["n"] > 0 else None
-
     out = []
     for rid in order:
         rc = races[rid]
@@ -75,34 +109,12 @@ def load_races(db_path, limit_year=None):
         for idx, e in enumerate(ents):
             if e["finish_pos"] == 1:
                 win_idx = idx
-            hid = e["horse_id"]
-            hs = horse_stats.get(hid)
+            hs = horse_stats.get(e["horse_id"])
             js = jockey_stats.get(e["jockey"])
             ts = trainer_stats.get(e["trainer"])
-            n_past = hs["n"] if hs else 0
-            days_since = None
-            if hs and hs["last_date"]:
-                days_since = _date_diff(hs["last_date"], rc["date"])
-            feat = {
-                "kinryo": _f(e["kinryo"], 55.0),
-                "horse_weight": _f(e["horse_weight"], 470.0),
-                "weight_diff": _f(e["weight_diff"], 0.0),
-                "age": _f(e["age"], 4.0),
-                "is_female": 1.0 if (e["sex"] in ("牝",)) else 0.0,
-                "field_size": float(field),
-                "post_rel": (e["horse_num"] or 1) / max(field, 1),
-                "is_debut": 1.0 if n_past == 0 else 0.0,
-                "n_past": float(n_past),
-                "win_rate": _f(rate(hs, "win"), 0.08),
-                "place_rate": _f(rate(hs, "place"), 0.25),
-                # 平均着順を頭数で相対化(小さいほど強い→符号反転で大きいほど強い)
-                "avg_finish_rel": _f((hs["fin_sum"] / hs["n"]) if hs and hs["n"] else None, 8.0),
-                "best_agari": _f(hs.get("best_agari") if hs else None, 36.0),
-                "avg_speed": _f(hs.get("speed_sum") / hs["n"] if hs and hs["n"] else None, 16.0),
-                "days_since_last": _f(days_since, 60.0),
-                "jockey_win_rate": _f(rate(js, "win"), 0.06),
-                "trainer_win_rate": _f(rate(ts, "win"), 0.06),
-            }
+            pre = {k: e[k] for k in ("kinryo", "horse_weight", "weight_diff",
+                                     "age", "sex", "horse_num")}
+            feat = compute_feat(pre, hs, js, ts, field, rc["date"])
             feats.append(feat)
             X.append([feat[k] for k in FEAT_NAMES])
             nums.append(e["horse_num"])
@@ -123,6 +135,8 @@ def load_races(db_path, limit_year=None):
         })
         # レース後に累積統計を更新(このレースは以後のレースの過去走になる)
         _update_stats(ents, horse_stats, jockey_stats, trainer_stats, rc, dist)
+    if return_stats:
+        return out, (horse_stats, jockey_stats, trainer_stats)
     return out
 
 

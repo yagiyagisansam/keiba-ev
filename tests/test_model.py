@@ -95,5 +95,30 @@ class TestBacktest(unittest.TestCase):
         self.assertLessEqual(ci["mean"], ci["hi"] + 1e-9)
 
 
+class TestMergeDB(unittest.TestCase):
+    def test_merge_counts(self):
+        import os, tempfile
+        from scraper import db as dbmod
+        from evmodel.mergedb import merge
+        paths = []
+        for k in range(2):
+            p = tempfile.mktemp(suffix=f"_{k}.db")
+            c = dbmod.open_db(p, year=2016 + k)
+            c.execute("INSERT INTO races(race_id,kaisai_date,venue_code,status_result) "
+                      "VALUES(?,?,?,1)", (f"20160000000{k}", "20160101", "05"))
+            c.execute("INSERT INTO entries(race_id,horse_num,finish_pos,horse_id) "
+                      "VALUES(?,1,1,?)", (f"20160000000{k}", f"H{k}"))
+            c.commit(); c.close(); paths.append(p)
+        dest = tempfile.mktemp(suffix="_all.db")
+        merge(paths, dest)
+        import sqlite3
+        c = sqlite3.connect(dest)
+        self.assertEqual(c.execute("SELECT COUNT(*) FROM races").fetchone()[0], 2)
+        self.assertEqual(c.execute("SELECT COUNT(*) FROM entries").fetchone()[0], 2)
+        c.close()
+        for p in paths + [dest]:
+            os.path.exists(p) and os.unlink(p)
+
+
 if __name__ == "__main__":
     unittest.main()

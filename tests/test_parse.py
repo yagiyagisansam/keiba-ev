@@ -12,6 +12,7 @@ from scraper.db import canonical_combo, combo_from_api_key
 from scraper.enumerate_races import parse_calendar, parse_race_list
 from scraper.fetch_odds import parse_odds_payload, place_odds_map, win_odds_map
 from scraper.parse_result import parse_result_page
+from scraper.parse_shutuba import parse_shutuba
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -117,6 +118,23 @@ class TestResultPage(unittest.TestCase):
         self.assertEqual(winner["trainer"], "金成")
         self.assertEqual(winner["finish_time_sec"], 83.6)  # 1:23.6
         self.assertEqual(winner["agari3f"], 35.4)
+
+
+class TestShutuba(unittest.TestCase):
+    def test_parse_shutuba(self):
+        horses = parse_shutuba(load("shutuba_201605021211.html"))
+        self.assertEqual(len(horses), 16)
+        for key in ("horse_num", "horse_id", "sex", "age", "kinryo",
+                    "horse_weight", "weight_diff", "jockey"):
+            self.assertTrue(all(h[key] is not None for h in horses), f"{key} 欠損")
+        h1 = horses[0]
+        self.assertEqual(h1["horse_num"], 1)
+        self.assertEqual(h1["horse_id"], "2010102853")
+        self.assertEqual(h1["sex"], "牡")
+        self.assertEqual(h1["kinryo"], 57.0)
+        self.assertEqual(h1["horse_weight"], 480)
+        self.assertEqual(h1["weight_diff"], -2)
+        self.assertEqual(h1["jockey"], "柴田善")
 
 
 class TestOddsApi(unittest.TestCase):
