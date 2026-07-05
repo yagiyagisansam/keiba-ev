@@ -9,7 +9,16 @@ import sqlite3
 import zlib
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = "1"
+SCHEMA_VERSION = "2"
+
+# v2 で entries に追加した、市場オッズに依存しないファンダメンタル特徴量。
+# 既存 v1 DB は open_db() が ALTER TABLE で加算マイグレーションする(データは保持)。
+ENTRY_FEATURE_COLUMNS = [
+    ("horse_id", "TEXT"), ("sex", "TEXT"), ("age", "INTEGER"),
+    ("kinryo", "REAL"), ("horse_weight", "INTEGER"), ("weight_diff", "INTEGER"),
+    ("jockey", "TEXT"), ("trainer", "TEXT"), ("affiliation", "TEXT"),
+    ("finish_time_sec", "REAL"), ("agari3f", "REAL"),
+]
 
 DDL = """
 CREATE TABLE IF NOT EXISTS meta (
@@ -58,6 +67,17 @@ CREATE TABLE IF NOT EXISTS entries (
   place_odds_min REAL,
   place_odds_max REAL,
   popularity     INTEGER,
+  horse_id       TEXT,
+  sex            TEXT,
+  age            INTEGER,
+  kinryo         REAL,
+  horse_weight   INTEGER,
+  weight_diff    INTEGER,
+  jockey         TEXT,
+  trainer        TEXT,
+  affiliation    TEXT,
+  finish_time_sec REAL,
+  agari3f        REAL,
   PRIMARY KEY (race_id, horse_num)
 );
 
@@ -128,12 +148,34 @@ def open_db(path, year=None):
             )
         conn.commit()
     elif row["value"] != SCHEMA_VERSION:
-        conn.close()
-        raise RuntimeError(
-            f"schema_version 不一致: DB={row['value']} コード={SCHEMA_VERSION}。"
-            "マイグレーションが必要です。"
-        )
+        migrate_schema(conn, row["value"])
+    # horse_id 列が存在してから索引を作る(新規=DDL 済 / 移行=ALTER 済)
+    if any(r["name"] == "horse_id" for r in conn.execute("PRAGMA table_info(entries)")):
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_entries_horse ON entries(horse_id)")
+        conn.commit()
     return conn
+
+
+def migrate_schema(conn, from_version):
+    """旧 DB を破壊せず加算マイグレーションする。
+
+    v1 -> v2: entries にファンダメンタル特徴量カラムを ALTER で追加(既存データ保持)。
+    追加カラムは NULL で入るので、ingest --refresh-features で結果ページを
+    再取得して埋める(旧データベースへの追加入力)。
+    """
+    existing = {r["name"] for r in conn.execute("PRAGMA table_info(entries)")}
+    added = []
+    for col, typ in ENTRY_FEATURE_COLUMNS:
+        if col not in existing:
+            conn.execute(f"ALTER TABLE entries ADD COLUMN {col} {typ}")
+            added.append(col)
+    conn.execute(
+        "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', ?)",
+        (SCHEMA_VERSION,),
+    )
+    conn.commit()
+    print(f"[migrate] schema {from_version} -> {SCHEMA_VERSION}: "
+          f"entries に {len(added)} カラム追加 {added}")
 
 
 def set_meta(conn, key, value):
@@ -180,16 +222,33 @@ def update_race_result(conn, race_id, meta, entries, payouts, status):
     for e in entries:
         conn.execute(
             """INSERT INTO entries (race_id, horse_num, waku, horse_name,
-                                    finish_pos, finish_status)
-               VALUES (?, ?, ?, ?, ?, ?)
+                                    finish_pos, finish_status,
+                                    horse_id, sex, age, kinryo, horse_weight, weight_diff,
+                                    jockey, trainer, affiliation, finish_time_sec, agari3f)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(race_id, horse_num) DO UPDATE SET
                  waku = COALESCE(excluded.waku, waku),
                  horse_name = COALESCE(excluded.horse_name, horse_name),
                  finish_pos = excluded.finish_pos,
-                 finish_status = excluded.finish_status""",
+                 finish_status = excluded.finish_status,
+                 horse_id = COALESCE(excluded.horse_id, horse_id),
+                 sex = COALESCE(excluded.sex, sex),
+                 age = COALESCE(excluded.age, age),
+                 kinryo = COALESCE(excluded.kinryo, kinryo),
+                 horse_weight = COALESCE(excluded.horse_weight, horse_weight),
+                 weight_diff = COALESCE(excluded.weight_diff, weight_diff),
+                 jockey = COALESCE(excluded.jockey, jockey),
+                 trainer = COALESCE(excluded.trainer, trainer),
+                 affiliation = COALESCE(excluded.affiliation, affiliation),
+                 finish_time_sec = COALESCE(excluded.finish_time_sec, finish_time_sec),
+                 agari3f = COALESCE(excluded.agari3f, agari3f)""",
             (
                 race_id, e["horse_num"], e.get("waku"), e.get("horse_name"),
                 e.get("finish_pos"), e.get("finish_status"),
+                e.get("horse_id"), e.get("sex"), e.get("age"), e.get("kinryo"),
+                e.get("horse_weight"), e.get("weight_diff"), e.get("jockey"),
+                e.get("trainer"), e.get("affiliation"), e.get("finish_time_sec"),
+                e.get("agari3f"),
             ),
         )
     for p in payouts:

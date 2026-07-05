@@ -99,6 +99,25 @@ class TestResultPage(unittest.TestCase):
 
         self.assertEqual(warnings, [])
 
+    def test_parse_entry_features(self):
+        _, entries, _, _ = parse_result_page(load("result_201605021211.html"))
+        # 市場オッズに依存しないファンダメンタル特徴量が全頭抽出できること
+        for key in ("horse_id", "sex", "age", "kinryo", "horse_weight", "weight_diff",
+                    "jockey", "trainer", "affiliation", "finish_time_sec", "agari3f"):
+            self.assertTrue(all(e[key] is not None for e in entries), f"{key} 欠損あり")
+        winner = next(e for e in entries if e["finish_pos"] == 1)
+        self.assertEqual(winner["horse_id"], "2011105967")
+        self.assertEqual(winner["sex"], "牡")
+        self.assertEqual(winner["age"], 5)
+        self.assertEqual(winner["kinryo"], 57.0)
+        self.assertEqual(winner["horse_weight"], 468)
+        self.assertEqual(winner["weight_diff"], -6)
+        self.assertEqual(winner["jockey"], "戸崎圭")
+        self.assertEqual(winner["affiliation"], "美浦")
+        self.assertEqual(winner["trainer"], "金成")
+        self.assertEqual(winner["finish_time_sec"], 83.6)  # 1:23.6
+        self.assertEqual(winner["agari3f"], 35.4)
+
 
 class TestOddsApi(unittest.TestCase):
     def test_win_odds(self):

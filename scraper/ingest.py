@@ -113,8 +113,11 @@ def enumerate_races_for_days(conn, session, date_filter=None):
 # レース取得(ワーカースレッド側: ネットワーク+パースのみ、DB 触らない)
 # ================================================================
 
-def fetch_race_data(session, row):
+def fetch_race_data(session, row, force_result=False):
     """1レース分を取得・パースして純データを返す(DB 書き込みなし)。
+
+    force_result=True のとき、status_result が DONE でも結果ページを再取得して
+    特徴量カラム(斤量・馬体重・騎手・血統ID・上がり等)を埋め直す(旧DBへの追加入力)。
 
     row: {race_id, kaisai_date, status_result, status_odds, n_horses}
     返り値 dict:
@@ -134,7 +137,7 @@ def fetch_race_data(session, row):
     n_horses = row["n_horses"]
 
     # --- 結果・払戻 ---
-    if row["status_result"] != db.STATUS_DONE:
+    if force_result or row["status_result"] != db.STATUS_DONE:
         try:
             html = session.get_text(config.RACE_RESULT_URL.format(race_id=race_id))
             out["result_data"] = parse_result_page(html)
@@ -241,7 +244,23 @@ def write_progress(conn, path, extra=None):
 # メインループ(並列取得 → 逐次書き込み)
 # ================================================================
 
-def run_targets(conn, targets, *, workers, sleep_sec, guard, budget, counts):
+def refresh_feature_targets(conn, where_extra="", params=()):
+    """特徴量カラムが未取得(v1 から移行した/旧収集の)完了レースを返す。
+
+    status_result は DONE だが horse_id が NULL の行 = 結果ページ再取得で
+    ファンダメンタル特徴量を埋める対象(旧データベースへの追加入力)。
+    """
+    q = (
+        "SELECT r.race_id, r.kaisai_date, r.status_result, r.status_odds, r.n_horses "
+        "FROM races r WHERE r.status_result = 1 " + where_extra + " AND EXISTS ("
+        "  SELECT 1 FROM entries e WHERE e.race_id = r.race_id AND e.horse_id IS NULL"
+        ") ORDER BY r.kaisai_date, r.race_id"
+    )
+    return [dict(r) for r in conn.execute(q, params).fetchall()]
+
+
+def run_targets(conn, targets, *, workers, sleep_sec, guard, budget, counts,
+                force_result=False):
     """対象レースをワーカー並列で取得し、完了順に書き込む。"""
     total = len(targets)
     print(f"[ingest] 対象 {total} レース (workers={workers}, "
@@ -255,7 +274,7 @@ def run_targets(conn, targets, *, workers, sleep_sec, guard, budget, counts):
         tls.session = PoliteSession(sleep_sec=sleep_sec, guard=guard)
 
     def task(row):
-        return fetch_race_data(tls.session, row)
+        return fetch_race_data(tls.session, row, force_result=force_result)
 
     processed = 0
     block_error = None
@@ -315,6 +334,9 @@ def main(argv=None):
     ap.add_argument("--sleep", type=float, default=None,
                     help=f"ワーカー毎のリクエスト間ウェイト秒 (既定 {config.SLEEP_SEC})")
     ap.add_argument("--progress-json", help="進捗サマリの出力先 JSON")
+    ap.add_argument("--refresh-features", action="store_true",
+                    help="完了済みレースの結果ページを再取得し、特徴量カラム(斤量・馬体重・"
+                         "騎手・血統ID・上がり等)が未取得の行を埋め直す(旧DBへの追加入力)")
     args = ap.parse_args(argv)
 
     if not (args.year or args.date or args.race_id):
@@ -330,6 +352,28 @@ def main(argv=None):
     exit_code = EXIT_OK
     counts = {"done": 0, "skipped": 0, "error": 0, "pending": 0}
     try:
+        # 特徴量バックフィル: 収集済みレースの結果ページを再取得して特徴量を埋める
+        if args.refresh_features:
+            if args.race_id:
+                where, params = "AND r.race_id = ?", (args.race_id,)
+            elif args.date:
+                where, params = "AND r.kaisai_date = ?", (args.date,)
+            elif args.month:
+                where = "AND r.kaisai_date LIKE ?"
+                params = (f"{args.year:04d}{args.month:02d}%",)
+            else:
+                where, params = "", ()
+            targets = refresh_feature_targets(conn, where, params)
+            run_targets(conn, targets, workers=max(1, args.workers), sleep_sec=args.sleep,
+                        guard=guard, budget=budget, counts=counts, force_result=True)
+            db.set_meta(conn, "last_run_at", db.now_utc())
+            conn.commit()
+            write_progress(conn, progress_path, extra={"last_run_counts": counts,
+                                                       "mode": "refresh-features"})
+            conn.close()
+            print(f"[ingest] 特徴量バックフィル終了: {counts}")
+            return exit_code
+
         # 1) 開催日・レース列挙
         if args.race_id:
             race_id = args.race_id
