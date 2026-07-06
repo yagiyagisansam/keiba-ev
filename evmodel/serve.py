@@ -40,7 +40,7 @@ def score_race(model, stats, entries, race_date):
     return pi
 
 
-def build(db_path, race_ids=None, date=None, out_path="ev2_upcoming.json", limit_year=None):
+def build(db_path, race_ids=None, dates=None, out_path="ev2_upcoming.json", limit_year=None):
     races, stats = load_races(db_path, limit_year=limit_year, return_stats=True)
     labeled = [r for r in races if r["win"] is not None]
     print(f"[serve] 学習用 {len(labeled)} レースでモデル学習")
@@ -49,15 +49,20 @@ def build(db_path, race_ids=None, date=None, out_path="ev2_upcoming.json", limit
 
     guard = BlockGuard()
     session = PoliteSession(sleep_sec=0.5, guard=guard)
-    if not race_ids:
-        stubs = fetch_race_list(session, date)
-        race_ids = [s["race_id"] for s in stubs]
-        names = {s["race_id"]: s.get("race_name") for s in stubs}
-    else:
-        names = {}
+
+    # (race_id, race_date, name) の対象一覧を作る
+    targets = []
+    if race_ids:
+        for rid in race_ids:
+            targets.append((rid, None, None))
+    for d in (dates or []):
+        for s in fetch_race_list(session, d):
+            targets.append((s["race_id"], d, s.get("race_name")))
 
     out = {"schema": "ev2-upcoming/1", "model": {"alpha": alpha, "beta": beta}, "races": {}}
-    for rid in race_ids:
+    for rid, rdate, name in targets:
+        if rid in out["races"]:
+            continue
         try:
             html = session.get_text(
                 f"https://race.sp.netkeiba.com/race/shutuba.html?race_id={rid}")
@@ -67,10 +72,9 @@ def build(db_path, race_ids=None, date=None, out_path="ev2_upcoming.json", limit
             continue
         if not entries:
             continue
-        date_str = rid[:4] + "0000" if date is None else date
-        pi = score_race(model, stats, entries, date or "20991231")
+        pi = score_race(model, stats, entries, rdate or "20991231")
         out["races"][rid] = {
-            "name": names.get(rid), "date": date,
+            "name": name, "date": rdate,
             "horses": [{"num": e["horse_num"], "name": e["horse_name"],
                         "pi": round(pi[i], 5)} for i, e in enumerate(entries)],
         }
@@ -86,14 +90,15 @@ def build(db_path, race_ids=None, date=None, out_path="ev2_upcoming.json", limit
 def main(argv=None):
     ap = argparse.ArgumentParser(description="未来レースの Stage1 π を書き出す(ライブ採点)")
     ap.add_argument("--db", required=True)
-    ap.add_argument("--date", help="対象開催日 YYYYMMDD(その日の全レースを採点)")
+    ap.add_argument("--date", action="append",
+                    help="対象開催日 YYYYMMDD(複数可。その日の全レースを採点)")
     ap.add_argument("--race-id", action="append", help="対象レースID(複数可)")
     ap.add_argument("--year", help="学習に使う年で絞る(kaisai_date 前方一致)")
     ap.add_argument("--out", default="ev2_upcoming.json")
     args = ap.parse_args(argv)
     if not (args.date or args.race_id):
         ap.error("--date か --race-id が必要です")
-    build(args.db, race_ids=args.race_id, date=args.date, out_path=args.out,
+    build(args.db, race_ids=args.race_id, dates=args.date, out_path=args.out,
           limit_year=args.year)
     return 0
 
