@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>競馬EV｜独立モデル法</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,'Hiragino Sans','Yu Gothic','Meiryo',sans-serif;background:#ECEFF1;color:#263238;font-size:14px}
+#app{max-width:1400px;margin:0 auto}
+.kb-nav{background:#0A3270;display:flex;padding:0 10px;gap:4px;overflow-x:auto}
+.kb-nav a{display:inline-flex;align-items:center;padding:9px 14px;font-size:13px;font-weight:bold;color:#90CAF9;text-decoration:none;border-radius:4px 4px 0 0;white-space:nowrap}
+.kb-nav a:hover{background:rgba(255,255,255,.1);color:#fff}
+.kb-nav a.active{background:#0D47A1;color:#fff}
+.kb-hdr{background:#0D47A1;color:#fff;padding:10px 14px;font-size:15px;font-weight:bold;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px}
+.kb-hdr .sub{font-size:12px;font-weight:normal;color:#BBDEFB}
+.wrap{padding:12px}
+.card{background:#fff;border:1px solid #CFD8DC;border-radius:8px;padding:12px;margin-bottom:12px}
+.card h2{font-size:14px;color:#0D47A1;margin-bottom:8px;border-left:4px solid #0D47A1;padding-left:8px}
+.note{font-size:12px;color:#546E7A;line-height:1.7}
+.modebar{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.modebar button{flex:1;min-width:130px;padding:9px;border:1px solid #B0BEC5;background:#fff;border-radius:8px;font-weight:bold;font-size:13px;cursor:pointer;color:#37474F}
+.modebar button.on{background:#0D47A1;color:#fff;border-color:#0D47A1}
+.ctrls{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+.ctrl{display:flex;flex-direction:column;gap:3px}
+.ctrl label{font-size:11px;color:#546E7A;font-weight:bold}
+.ctrl input,.ctrl select{padding:6px 8px;border:1px solid #B0BEC5;border-radius:5px;font-size:13px;min-width:120px}
+.btn{background:#0D47A1;color:#fff;border:none;padding:9px 16px;border-radius:6px;font-weight:bold;cursor:pointer;font-size:13px}
+.btn:hover{background:#1565C0}
+.btn.sec{background:#546E7A}
+.summary{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px}
+.stat{background:#F5F7FA;border:1px solid #E0E0E0;border-radius:6px;padding:8px 12px;min-width:110px}
+.stat .k{font-size:11px;color:#78909C}
+.stat .v{font-size:18px;font-weight:bold;color:#0D47A1}
+.stat .v.pos{color:#1B5E20}.stat .v.neg{color:#B71C1C}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+th,td{border:1px solid #E0E0E0;padding:5px 6px;text-align:right;white-space:nowrap}
+th{background:#ECEFF1;color:#37474F;position:sticky;top:0}
+td.l,th.l{text-align:left}
+.tbl-wrap{max-height:70vh;overflow:auto;border:1px solid #CFD8DC;border-radius:6px}
+tr.betrow{background:#E8F5E9}
+.ev-pos{color:#1B5E20;font-weight:bold}.ev-neg{color:#B71C1C}
+.edge-pos{color:#1B5E20}.edge-neg{color:#B71C1C}
+.won{color:#0D47A1;font-weight:bold}
+.empty{color:#78909C;padding:22px;text-align:center}
+details.race{margin-bottom:8px;border:1px solid #E0E0E0;border-radius:6px}
+details.race>summary{cursor:pointer;padding:7px 10px;background:#F5F7FA;font-weight:bold;font-size:13px;list-style:none;display:flex;justify-content:space-between;gap:8px}
+details.race[open]>summary{background:#E3F2FD}
+.pill{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold}
+.pill.ev{background:#E8F5E9;color:#1B5E20}
+.hide{display:none}
+</style>
+</head>
+<body>
+<div id="app">
+
+<div class="kb-nav">
+  <a href="index.html">🏇 全券種</a>
+  <a href="umatan.html">🎯 馬単特化</a>
+  <a href="ev2.html" class="active">🧮 独立モデル法</a>
+</div>
+
+<div class="kb-hdr">
+  <span>🧮 二段階モデル EV（回収率100%超を狙う手法）</span>
+  <span id="status" class="sub">初期化中…</span>
+</div>
+
+<div class="wrap">
+
+  <div class="modebar">
+    <button id="mbLive" class="on" onclick="setMode('live')">📡 ライブ（本番・発走前）</button>
+    <button id="mbBt" onclick="setMode('bt')">📊 検証（バックテスト閲覧）</button>
+  </div>
+
+  <!-- ================= ライブモード ================= -->
+  <div id="livePane">
+    <div class="card">
+      <h2>ライブ EV 計算（スマホ完結）</h2>
+      <p class="note">
+        重い学習は GitHub Actions（スマホの GitHub から起動）が実施し、各馬の
+        <b>独立勝率 π</b>（斤量・馬体重・騎手・過去走から算出、オッズ非依存）を
+        <code>ev2_upcoming.json</code> に書き出します。このページは発走前に
+        <b>ライブ単勝オッズだけ</b>を取得し、<code>p ∝ π<sup>α</sup>·q<sup>β</sup></code>、
+        <code>EV = p × オッズ</code> を計算します。オッズは閲覧時に取得するので常に最新です。
+      </p>
+      <div class="ctrls" style="margin-top:10px">
+        <div class="ctrl"><label>π データ (ev2_upcoming.json)</label><input type="file" id="upFile" accept=".json"></div>
+        <button class="btn sec" onclick="autoLoadUpcoming()">公開データを再取得</button>
+      </div>
+      <div class="ctrls" style="margin-top:10px">
+        <div class="ctrl"><label>レース</label><select id="raceSel"><option value="">（πデータ未読込）</option></select></div>
+        <div class="ctrl"><label>EV下限(1+margin)</label><input type="number" id="lmargin" value="1.10" step="0.01"></div>
+        <div class="ctrl"><label>分数Kelly</label><input type="number" id="lkelly" value="0.25" step="0.05" min="0" max="1"></div>
+        <div class="ctrl"><label>1点上限(資金比)</label><input type="number" id="lcap" value="0.03" step="0.01"></div>
+        <button class="btn" onclick="runLive()">▶ ライブオッズ取得・計算</button>
+      </div>
+      <p class="note" id="liveMsg" style="margin-top:8px"></p>
+    </div>
+    <div id="liveOut"><div class="empty">π データを読み込み、レースを選んで「ライブオッズ取得・計算」を押してください。</div></div>
+  </div>
+
+  <!-- ================= 検証モード ================= -->
+  <div id="btPane" class="hide">
+    <div class="card">
+      <h2>バックテスト予測の閲覧</h2>
+      <p class="note">
+        Python 側 <code>evmodel.pipeline</code> が walk-forward 検証で書き出した
+        <code>ev2_predictions.json</code>（過去レースの結合勝率 p・市場勝率 q・勝敗）を読み込み、
+        EV&gt;1 の買い目・実績 ROI・Kelly 配分を表示します。理論は <code>docs/EV_METHODOLOGY.md</code>。
+      </p>
+      <div class="ctrls" style="margin-top:10px">
+        <div class="ctrl"><label>予測JSON</label><input type="file" id="btFile" accept=".json"></div>
+        <button class="btn sec" onclick="autoLoadPreds()">公開データを再取得</button>
+        <div class="ctrl"><label>EV下限(1+margin)</label><input type="number" id="margin" value="0.05" step="0.01"></div>
+        <div class="ctrl"><label>分数Kelly</label><input type="number" id="kelly" value="0.5" step="0.05"></div>
+        <div class="ctrl"><label>1点上限</label><input type="number" id="cap" value="0.05" step="0.01"></div>
+        <button class="btn" onclick="renderBt()">▶ 計算</button>
+        <button class="btn sec" onclick="loadDemo()">合成デモ</button>
+      </div>
+    </div>
+    <div class="card hide" id="summaryCard">
+      <h2>サマリー</h2>
+      <div class="summary" id="summary"></div>
+      <p class="note" id="verdict" style="margin-top:8px"></p>
+    </div>
+    <div id="btOut"><div class="empty">予測JSONを読み込むと結果が表示されます。</div></div>
+  </div>
+
+</div><!-- /wrap -->
+</div><!-- /app -->
+
+<script>
+// index.html と同じ Cloudflare Worker プロキシ経由で netkeiba を取得
+const CONFIG = { PROXY: "https://keiba-proxy.yagiyagisansam.workers.dev" };
+async function proxyFetch(url){
+  if(!CONFIG.PROXY) throw new Error("PROXY未設定");
+  const r = await fetch(`${CONFIG.PROXY}?url=${encodeURIComponent(url)}`);
+  if(!r.ok) throw new Error("HTTP "+r.status);
+  return r.text();
+}
+async function getWinOdds(raceId){
+  const url = `https://race.sp.netkeiba.com/?pid=api_get_jra_odds&race_id=${raceId}&type=1&action=init`;
+  const raw = await proxyFetch(url);
+  const data = JSON.parse(raw);
+  const rawOdds = data?.data?.odds?.["1"] || {};
+  const out = {};
+  for(const [k,v] of Object.entries(rawOdds)){ const o=v?.[0]||""; if(/^[\d.]+$/.test(o)) out[parseInt(k)]=parseFloat(o); }
+  return out;
+}
+function status(s){ document.getElementById('status').textContent = s; }
+
+// ---------------- モード切替 ----------------
+function setMode(m){
+  const live = m==='live';
+  document.getElementById('livePane').classList.toggle('hide', !live);
+  document.getElementById('btPane').classList.toggle('hide', live);
+  document.getElementById('mbLive').classList.toggle('on', live);
+  document.getElementById('mbBt').classList.toggle('on', !live);
+}
+
+// ================= ライブモード =================
+let UPCOMING = null;
+document.getElementById('upFile').addEventListener('change', e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader(); r.onload=()=>{ try{ setUpcoming(JSON.parse(r.result)); }catch(x){ liveMsg('JSON解析エラー: '+x.message);} }; r.readAsText(f);
+});
+async function autoLoadUpcoming(){
+  try{ const r=await fetch('./ev2_upcoming.json',{cache:'no-store'}); if(!r.ok) throw new Error('HTTP '+r.status);
+    setUpcoming(await r.json()); }
+  catch(x){ liveMsg('公開πデータを取得できませんでした（'+x.message+'）。ファイルを手動で読み込んでください。'); }
+}
+function setUpcoming(d){
+  UPCOMING=d;
+  const sel=document.getElementById('raceSel'); sel.innerHTML='';
+  const ids=Object.keys(d.races||{});
+  if(!ids.length){ sel.innerHTML='<option value="">レースなし</option>'; return; }
+  for(const rid of ids){ const r=d.races[rid]; const o=document.createElement('option');
+    o.value=rid; o.textContent=`${rid}${r.name?'　'+r.name:''}`; sel.appendChild(o); }
+  status(`πデータ: ${ids.length}レース (α=${d.model.alpha.toFixed(3)}, β=${d.model.beta.toFixed(3)})`);
+  liveMsg(`${ids.length}レース分の独立勝率πを読み込みました。レースを選んで計算してください。`);
+}
+function liveMsg(s){ document.getElementById('liveMsg').textContent=s; }
+
+function combineLive(horses, alpha, beta, oddsMap){
+  const rows = horses.map(h=>({num:h.num,name:h.name,pi:h.pi,odds:oddsMap[h.num]}))
+                     .filter(h=>h.odds>0 && h.pi>0);
+  if(!rows.length) return [];
+  const invsum = rows.reduce((s,h)=>s+1/h.odds,0);
+  rows.forEach(h=> h.q=(1/h.odds)/invsum);
+  const logs = rows.map(h=> alpha*Math.log(Math.max(h.pi,1e-9)) + beta*Math.log(Math.max(h.q,1e-9)));
+  const mx=Math.max(...logs); const ex=logs.map(x=>Math.exp(x-mx)); const z=ex.reduce((a,b)=>a+b);
+  rows.forEach((h,i)=>{ h.p=ex[i]/z; h.ev=h.p*h.odds; h.edge=h.p-h.q; });
+  rows.sort((a,b)=>b.ev-a.ev);
+  return rows;
+}
+function kf(p,odds){ const b=odds-1; if(b<=0) return 0; return Math.max(0,(p*odds-1)/b); }
+
+async function runLive(){
+  if(!UPCOMING){ liveMsg('先に π データ(ev2_upcoming.json)を読み込んでください。'); return; }
+  const rid=document.getElementById('raceSel').value; if(!rid){ liveMsg('レースを選択してください。'); return; }
+  const margin=parseFloat(document.getElementById('lmargin').value)||1;
+  const kelly=parseFloat(document.getElementById('lkelly').value)||0;
+  const cap=parseFloat(document.getElementById('lcap').value)||0.03;
+  liveMsg('ライブ単勝オッズを取得中…');
+  let oddsMap;
+  try{ oddsMap=await getWinOdds(rid); }catch(x){ liveMsg('オッズ取得失敗: '+x.message); return; }
+  if(!Object.keys(oddsMap).length){ liveMsg('オッズがまだ出ていません（発走直前に再取得してください）。'); return; }
+  const race=UPCOMING.races[rid];
+  const rows=combineLive(race.horses, UPCOMING.model.alpha, UPCOMING.model.beta, oddsMap);
+  const bets=rows.filter(h=>h.ev>margin);
+  const out=document.getElementById('liveOut');
+  let h=`<div class="card"><h2>${rid}${race.name?'　'+race.name:''} <span class="pill ev">買い目 ${bets.length}点</span></h2>`;
+  h+='<div class="tbl-wrap"><table><thead><tr><th>馬番</th><th class="l">馬名</th><th>π</th><th>市場q</th><th>エッジ</th><th>オッズ</th><th>EV</th><th>Kelly比</th><th>推奨賭け</th></tr></thead><tbody>';
+  const bank= 100000;
+  for(const x of rows){
+    const bet=x.ev>margin; const f=bet?kelly*kf(x.p,x.odds):0; const stake=Math.min(cap,f);
+    h+=`<tr class="${bet?'betrow':''}"><td>${x.num}</td><td class="l">${x.name||''}</td>`
+     +`<td>${(x.pi*100).toFixed(1)}%</td><td>${(x.q*100).toFixed(1)}%</td>`
+     +`<td class="${x.edge>=0?'edge-pos':'edge-neg'}">${(x.edge*100).toFixed(1)}pt</td>`
+     +`<td>${x.odds.toFixed(1)}</td>`
+     +`<td class="${x.ev>=1?'ev-pos':'ev-neg'}">${x.ev.toFixed(2)}</td>`
+     +`<td>${(f*100).toFixed(1)}%</td>`
+     +`<td>${bet?('~'+Math.round(stake*bank).toLocaleString()+'円'):'-'}</td></tr>`;
+  }
+  h+='</tbody></table></div><p class="note" style="margin-top:6px">π=独立モデルの勝率(オッズ非依存)／q=市場勝率／EV=p×オッズ。推奨賭けは資金10万円想定の分数Kelly。</p></div>';
+  out.innerHTML=h;
+  liveMsg(`計算完了: ${bets.length}点が EV>${margin.toFixed(2)}。`);
+}
+
+// ================= 検証モード（バックテスト閲覧） =================
+let DATA=null;
+document.getElementById('btFile').addEventListener('change', e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader(); r.onload=()=>{ try{ DATA=JSON.parse(r.result); renderBt(); }catch(x){ status('JSON解析エラー');} }; r.readAsText(f);
+});
+async function autoLoadPreds(){
+  try{ const r=await fetch('./ev2_predictions.json',{cache:'no-store'}); if(!r.ok) throw new Error('HTTP '+r.status);
+    DATA=await r.json(); renderBt(); status('公開予測を読込'); }
+  catch(x){ status('公開予測未取得'); }
+}
+function renderBt(){
+  if(!DATA||!DATA.races) return;
+  const margin=parseFloat(document.getElementById('margin').value)||0;
+  const kelly=parseFloat(document.getElementById('kelly').value)||0;
+  const cap=parseFloat(document.getElementById('cap').value)||0.05;
+  const rids=Object.keys(DATA.races).sort();
+  let betN=0,stakeU=0,retU=0,wins=0,hasLabels=false; const blocks=[];
+  for(const rid of rids){
+    const rc=DATA.races[rid];
+    const horses=rc.horses.map(h=>({...h,ev:h.p*h.odds,edge:h.p-(h.q||0)})).sort((a,b)=>b.ev-a.ev);
+    const bets=horses.filter(h=>h.ev>1+margin);
+    for(const h of bets){ const st=Math.min(cap,kelly*kf(h.p,h.odds)); h.stake=st; betN++; stakeU+=st;
+      if(h.won!==undefined){ hasLabels=true; if(h.won){ retU+=st*h.odds; wins++; } } }
+    blocks.push({rid,rc,horses,bets});
+  }
+  document.getElementById('summaryCard').classList.remove('hide');
+  const roi=stakeU>0?retU/stakeU:0; const el=document.getElementById('summary'); el.innerHTML='';
+  const add=(k,v,c)=>el.insertAdjacentHTML('beforeend',`<div class="stat"><div class="k">${k}</div><div class="v ${c||''}">${v}</div></div>`);
+  add('対象レース',rids.length); add('EV>閾値の買い目',betN);
+  if(hasLabels){ add('的中',wins); add('均等ROI',(roi*100).toFixed(1)+'%',roi>=1?'pos':'neg'); }
+  add('平均エッジ p−q', avgEdge(blocks).toFixed(4));
+  const v=document.getElementById('verdict');
+  v.innerHTML = !hasLabels ? '（勝敗ラベルが無いため実績ROIは非表示。予測EVのみ）'
+    : (roi>=1 ? `均等買い ROI <b>${(roi*100).toFixed(1)}%</b>（100%超）。単一セットの結果なので、walk-forward 全fold・CI（pipeline 出力）で安定して控除率を超えるか要確認。`
+             : `ROI <b>${(roi*100).toFixed(1)}%</b> で控除率の壁を破れていません。特徴量の強化が必要です。`);
+  const out=document.getElementById('btOut'); out.innerHTML='';
+  const wb=blocks.filter(b=>b.bets.length);
+  if(!wb.length){ out.innerHTML='<div class="empty">EV>閾値の買い目はありません（margin を下げると増えます）。</div>'; return; }
+  for(const b of wb){
+    const det=document.createElement('details'); det.className='race'; det.open=wb.length<=8;
+    det.innerHTML=`<summary><span>${b.rid}　(${b.rc.date||''})</span><span>買い目 ${b.bets.length}点</span></summary>`;
+    let h='<div class="tbl-wrap"><table><thead><tr><th>馬番</th><th class="l">馬名</th><th>予測p</th><th>市場q</th><th>エッジ</th><th>オッズ</th><th>EV</th><th>Kelly比</th>'+(b.horses[0].won!==undefined?'<th>結果</th>':'')+'</tr></thead><tbody>';
+    for(const x of b.horses){ const bet=x.ev>1+margin; const f=bet?kelly*kf(x.p,x.odds):0;
+      h+=`<tr class="${bet?'betrow':''}"><td>${x.num}</td><td class="l">${x.name||''}</td>`
+        +`<td>${(x.p*100).toFixed(1)}%</td><td>${x.q!=null?(x.q*100).toFixed(1)+'%':'-'}</td>`
+        +`<td class="${x.edge>=0?'edge-pos':'edge-neg'}">${(x.edge*100).toFixed(1)}pt</td>`
+        +`<td>${x.odds.toFixed(1)}</td><td class="${x.ev>=1?'ev-pos':'ev-neg'}">${x.ev.toFixed(2)}</td>`
+        +`<td>${(f*100).toFixed(1)}%</td>`+(x.won!==undefined?`<td class="${x.won?'won':''}">${x.won?'的中':'-'}</td>`:'')+'</tr>';
+    }
+    h+='</tbody></table></div>'; det.insertAdjacentHTML('beforeend',h); out.appendChild(det);
+  }
+}
+function avgEdge(bl){ let s=0,n=0; for(const b of bl) for(const h of b.bets){ s+=(h.p-(h.q||0)); n++; } return n?s/n:0; }
+
+function loadDemo(){
+  function sm(xs){const m=Math.max(...xs);const e=xs.map(x=>Math.exp(x-m));const z=e.reduce((a,b)=>a+b);return e.map(v=>v/z);}
+  let seed=12345; const rnd=()=>{seed=(1103515245*seed+12345)&0x7fffffff;return seed/0x7fffffff;};
+  const g=()=>{let s=0;for(let i=0;i<6;i++)s+=rnd();return (s-3);};
+  const races={};
+  for(let r=0;r<40;r++){ const k=8+Math.floor(rnd()*6); const st=Array.from({length:k},()=>g());
+    const tp=sm(st); let acc=0,win=k-1,u=rnd(); for(let i=0;i<k;i++){acc+=tp[i]; if(u<=acc){win=i;break;}}
+    const mkt=sm(st.map(s=>s+g()*0.6)); const odds=mkt.map(q=>Math.round((0.8/Math.max(q,1e-6))*10)/10);
+    const p=sm(st.map(s=>s*0.9)); const horses=[];
+    for(let i=0;i<k;i++) horses.push({num:i+1,name:'馬'+(i+1),p:Math.round(p[i]*1e4)/1e4,q:Math.round(mkt[i]*1e4)/1e4,odds:odds[i],won:i===win});
+    races['DEMO'+String(r).padStart(3,'0')]={date:'合成',horses}; }
+  DATA={schema:'ev2-predictions/1',races}; status('合成デモ40レース'); renderBt();
+}
+
+// 起動時: 公開データがあれば自動読込（GitHub Pages 上ではこれだけで動く）
+(async ()=>{ status('公開データ確認中…'); await autoLoadUpcoming(); await autoLoadPreds();
+  if(!UPCOMING) status('πデータ未読込（ライブ）'); })();
+</script>
+</body>
+</html>

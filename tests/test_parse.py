@@ -12,6 +12,7 @@ from scraper.db import canonical_combo, combo_from_api_key
 from scraper.enumerate_races import parse_calendar, parse_race_list
 from scraper.fetch_odds import parse_odds_payload, place_odds_map, win_odds_map
 from scraper.parse_result import parse_result_page
+from scraper.parse_shutuba import parse_shutuba
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -98,6 +99,42 @@ class TestResultPage(unittest.TestCase):
         self.assertEqual(pay[(8, "07-11-14")]["popularity"], 451)
 
         self.assertEqual(warnings, [])
+
+    def test_parse_entry_features(self):
+        _, entries, _, _ = parse_result_page(load("result_201605021211.html"))
+        # 市場オッズに依存しないファンダメンタル特徴量が全頭抽出できること
+        for key in ("horse_id", "sex", "age", "kinryo", "horse_weight", "weight_diff",
+                    "jockey", "trainer", "affiliation", "finish_time_sec", "agari3f"):
+            self.assertTrue(all(e[key] is not None for e in entries), f"{key} 欠損あり")
+        winner = next(e for e in entries if e["finish_pos"] == 1)
+        self.assertEqual(winner["horse_id"], "2011105967")
+        self.assertEqual(winner["sex"], "牡")
+        self.assertEqual(winner["age"], 5)
+        self.assertEqual(winner["kinryo"], 57.0)
+        self.assertEqual(winner["horse_weight"], 468)
+        self.assertEqual(winner["weight_diff"], -6)
+        self.assertEqual(winner["jockey"], "戸崎圭")
+        self.assertEqual(winner["affiliation"], "美浦")
+        self.assertEqual(winner["trainer"], "金成")
+        self.assertEqual(winner["finish_time_sec"], 83.6)  # 1:23.6
+        self.assertEqual(winner["agari3f"], 35.4)
+
+
+class TestShutuba(unittest.TestCase):
+    def test_parse_shutuba(self):
+        horses = parse_shutuba(load("shutuba_201605021211.html"))
+        self.assertEqual(len(horses), 16)
+        for key in ("horse_num", "horse_id", "sex", "age", "kinryo",
+                    "horse_weight", "weight_diff", "jockey"):
+            self.assertTrue(all(h[key] is not None for h in horses), f"{key} 欠損")
+        h1 = horses[0]
+        self.assertEqual(h1["horse_num"], 1)
+        self.assertEqual(h1["horse_id"], "2010102853")
+        self.assertEqual(h1["sex"], "牡")
+        self.assertEqual(h1["kinryo"], 57.0)
+        self.assertEqual(h1["horse_weight"], 480)
+        self.assertEqual(h1["weight_diff"], -2)
+        self.assertEqual(h1["jockey"], "柴田善")
 
 
 class TestOddsApi(unittest.TestCase):

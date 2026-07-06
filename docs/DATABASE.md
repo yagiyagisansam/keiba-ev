@@ -20,7 +20,10 @@ python backtest_example.py --db keiba_2025.db --date 20250105
 ## テーブル
 
 ### meta
-`schema_version` / `year` / `last_run_at`。schema_version が変わったら再収集かマイグレーションが必要。
+`schema_version`(現行 **2**)/ `year` / `last_run_at`。
+`open_db()` は v1 DB を開いたとき **entries に特徴量カラムを ALTER で自動追加**する
+(データ保持の加算マイグレーション)。追加カラムは NULL のままなので、
+`ingest --refresh-features` で結果ページを再取得して埋める(§特徴量バックフィル)。
 
 ### kaisai_days — 開催日(列挙状態の管理)
 | 列 | 説明 |
@@ -48,6 +51,16 @@ python backtest_example.py --db keiba_2025.db --date 20250105
 | finish_status | '1','2',… または '中止'/'除外'/'取消'/'失格' |
 | win_odds / popularity | 確定単勝オッズ・人気(オッズ API type1 より) |
 | place_odds_min / place_odds_max | 確定複勝オッズの下限/上限(type2 より) |
+| horse_id | netkeiba の馬ID。**過去走を紐づける時系列特徴量の要**(結果ページの馬リンクより) |
+| sex / age | 性(牡/牝/セ)・馬齢 |
+| kinryo | 斤量kg |
+| horse_weight / weight_diff | 馬体重kg・前走差 |
+| jockey / trainer / affiliation | 騎手・調教師・所属(美浦/栗東) |
+| finish_time_sec | 走破タイム秒(`1:23.6`→83.6)。**過去走のみ特徴量化**(当該レースはリーク) |
+| agari3f | 上がり3F秒。同上、過去走のみ使う |
+
+`horse_id`〜`agari3f` は v2 追加分。すべて**発走前確定 or 過去走参照用**で、
+市場オッズに依存しない Stage1(独立勝率モデル)の入力になる。詳細は `docs/EV_METHODOLOGY.md`。
 
 ### payouts — 払戻(1行=1的中)
 | 列 | 説明 |
@@ -88,6 +101,20 @@ odds = json.loads(zlib.decompress(payload).decode("utf-8"))
 
 combo は常に **2桁ゼロ埋め+`-`連結**。オッズと払戻で同じ正規化
 (`scraper/db.py: canonical_combo`)を通しているため、そのまま JOIN できる。
+
+## 特徴量バックフィル(旧DBへの追加入力)
+
+v1 で収集済みの DB は結果・オッズは揃っているが特徴量カラムが NULL。
+結果ページを再取得して斤量・馬体重・騎手・血統ID・上がり等を埋める:
+
+```bash
+python -m scraper.ingest --db keiba_2025.db --year 2025 --refresh-features
+# 単月/単日/単レースに絞る場合は --month / --date / --race-id を併用
+```
+
+`status_result=1` かつ `horse_id IS NULL` のレースだけを対象に結果ページを再取得し、
+**オッズは再取得しない**(entries の特徴量カラムのみ更新)。リジューム可能で、
+時間予算(`--max-minutes`)超過でも次回続きから埋める。10年分は年ごとに分けて回すのが安全。
 
 ## 収集の運用
 

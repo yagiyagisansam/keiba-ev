@@ -26,6 +26,78 @@ def _int_or_none(s):
         return None
 
 
+def _time_to_sec(text):
+    """'1:23.6' -> 83.6、'59.8' -> 59.8。パースできなければ None。"""
+    text = text.strip()
+    m = re.match(r"(?:(\d+):)?(\d+(?:\.\d+)?)$", text)
+    if not m:
+        return None
+    minutes = int(m.group(1)) if m.group(1) else 0
+    return round(minutes * 60 + float(m.group(2)), 1)
+
+
+def parse_entry_features(row):
+    """結果テーブルの1行から、市場オッズに依存しないファンダメンタル特徴量を抽出する。
+
+    返り値 dict(すべて best-effort、取れないものは None):
+      horse_id, sex, age, kinryo, horse_weight, weight_diff,
+      jockey, trainer, affiliation, finish_time_sec, agari3f
+    これらは Stage1(独立勝率モデル)の入力になる。当該レースの
+    タイム・上がりは「過去走の特徴量」としてのみ使い、当該レースのラベル側では使わない。
+    """
+    f = {
+        "horse_id": None, "sex": None, "age": None, "kinryo": None,
+        "horse_weight": None, "weight_diff": None, "jockey": None,
+        "trainer": None, "affiliation": None, "finish_time_sec": None, "agari3f": None,
+    }
+
+    info_m = re.search(r'<td class="Horse_Info">([\s\S]*?)</td>', row)
+    if info_m:
+        info = info_m.group(1)
+        hid = re.search(r"/horse/(\d+)", info)
+        if hid:
+            f["horse_id"] = hid.group(1)
+        left_m = re.search(r'class="Detail_Left">([\s\S]*?)</span>\s*</span>', info) \
+            or re.search(r'class="Detail_Left">([\s\S]*?)</span>', info)
+        if left_m:
+            left = _strip_tags(left_m.group(1))
+            sa = re.search(r"([牡牝セ騸せん])\s*(\d+)", left)
+            if sa:
+                f["sex"], f["age"] = sa.group(1), int(sa.group(2))
+            wt = re.search(r"(\d+)\s*kg\s*\(([-+]?\d+)\)", left)
+            if wt:
+                f["horse_weight"], f["weight_diff"] = int(wt.group(1)), int(wt.group(2))
+            else:  # 新馬など増減なし '468kg' / '計不'
+                wt2 = re.search(r"(\d+)\s*kg", left)
+                if wt2:
+                    f["horse_weight"] = int(wt2.group(1))
+        right_m = re.search(r'class="Detail_Right">([\s\S]*?)</span>', info)
+        if right_m:
+            # '戸崎圭 57.0<br />美浦・金成'
+            parts = [_strip_tags(p) for p in re.split(r"<br\s*/?>", right_m.group(1))]
+            parts = [p for p in parts if p]
+            if parts:
+                jm = re.match(r"([^\d]+?)\s*(\d+\.\d+)?$", parts[0])
+                if jm:
+                    f["jockey"] = jm.group(1).strip() or None
+                    if jm.group(2):
+                        f["kinryo"] = float(jm.group(2))
+            if len(parts) > 1 and "・" in parts[1]:
+                aff, tr = parts[1].split("・", 1)
+                f["affiliation"], f["trainer"] = aff.strip() or None, tr.strip() or None
+
+    time_m = re.search(r'<td class="Time">([\s\S]*?)</td>', row)
+    if time_m:
+        tcell = time_m.group(1)
+        dt_m = re.search(r"<dt>([\s\S]*?)</dt>", tcell)
+        if dt_m:
+            f["finish_time_sec"] = _time_to_sec(_strip_tags(dt_m.group(1)))
+        ag_m = re.search(r"\((\d+\.\d+)\)", _strip_tags(tcell))
+        if ag_m:
+            f["agari3f"] = float(ag_m.group(1))
+    return f
+
+
 class ResultNotAvailable(Exception):
     """結果テーブルがまだ無い(未実施・中止など)。"""
 
@@ -84,13 +156,15 @@ def parse_result_table(html):
         else:
             finish_pos, finish_status = None, rank_text  # 中止/除外/取消/失格 等
 
-        entries.append({
+        entry = {
             "horse_num": horse_num,
             "waku": waku,
             "horse_name": horse_name,
             "finish_pos": finish_pos,
             "finish_status": finish_status,
-        })
+        }
+        entry.update(parse_entry_features(row))
+        entries.append(entry)
     if not entries:
         raise ResultNotAvailable("結果行が抽出できません")
     entries.sort(key=lambda e: e["horse_num"])
