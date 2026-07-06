@@ -9,7 +9,7 @@
 # 使い方(スマホの GitHub アプリ/Webから):
 #   Actions → モデル学習・π生成 → Run workflow
 #     years        : 学習に使う年(カンマ区切り, 空なら COLLECT_YEARS か現在年)
-#     dates        : ライブπを出す開催日 YYYYMMDD(カンマ区切り, 空ならπ生成スキップ)
+#     dates        : ライブπを出す開催日 YYYYMMDD(カンマ区切り, 空なら直近の土日を自動対象)
 #     refresh_features: true で結果ページ再取得し特徴量を埋める(旧DB用, 時間かかる)
 name: モデル学習・π生成
 
@@ -20,7 +20,7 @@ on:
         description: '学習に使う年 (カンマ区切り, 例 2016,2017,...)'
         default: ''
       dates:
-        description: 'ライブπ対象の開催日 YYYYMMDD (カンマ区切り, 空ならスキップ)'
+        description: 'ライブπ対象の開催日 YYYYMMDD (カンマ区切り, 空なら直近の土日を自動対象)'
         default: ''
       min_train:
         description: 'walk-forward 最小学習レース数'
@@ -106,15 +106,18 @@ jobs:
           python -m evmodel.pipeline --db keiba_all.db --out ev2_predictions.json \
             --min-train "$MIN_TRAIN" || echo "pipeline 警告"
 
-          # ライブπ(対象日が指定されていれば)
-          if [ -n "$IN_DATES" ]; then
-            IFS=',' read -ra DATES <<< "$IN_DATES"
-            ARGS=()
-            for D in "${DATES[@]}"; do D="$(echo "$D" | tr -d ' ')"; [ -n "$D" ] && ARGS+=(--date "$D"); done
-            # 複数日指定時は最後の --date が有効。1日ずつ出したい場合はファイル名を分ける運用に
-            python -m evmodel.serve --db keiba_all.db "${ARGS[@]}" --out ev2_upcoming.json \
-              || echo "serve 警告(出馬表未公開などはスキップ)"
+          # ライブπ。日付指定が無ければ(cron等)、直近の土日を自動対象にする。
+          if [ -z "$IN_DATES" ]; then
+            SAT=$(date -d "next Saturday" +%Y%m%d)
+            SUN=$(date -d "$SAT +1 day" +%Y%m%d)
+            IN_DATES="$SAT,$SUN"
+            echo "[serve] 日付未指定 → 直近の土日 $IN_DATES を自動対象"
           fi
+          IFS=',' read -ra DATES <<< "$IN_DATES"
+          ARGS=()
+          for D in "${DATES[@]}"; do D="$(echo "$D" | tr -d ' ')"; [ -n "$D" ] && ARGS+=(--date "$D"); done
+          python -m evmodel.serve --db keiba_all.db "${ARGS[@]}" --out ev2_upcoming.json \
+            || echo "serve 警告(出馬表未公開などはスキップ)"
 
           # main へ公開(Pages が再配信 → ev2.html が自動読込)
           git config user.name "github-actions[bot]"
