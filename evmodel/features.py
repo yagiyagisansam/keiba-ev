@@ -18,6 +18,8 @@ FEAT_NAMES = [
     "is_debut", "n_past", "win_rate", "place_rate", "avg_finish_rel",
     "best_agari", "avg_speed", "days_since_last",
     "jockey_win_rate", "trainer_win_rate",
+    # 近走リカレンシー(第2ラウンドで追加): 直近の勢い・状態・トレンド
+    "recent_finish_rel", "recent_win_rate3", "best_speed", "form_trend",
 ]
 
 
@@ -37,6 +39,23 @@ def compute_feat(pre, hs, js, ts, field, race_date):
     """
     n_past = hs["n"] if hs else 0
     days_since = _date_diff(hs["last_date"], race_date) if hs and hs.get("last_date") else None
+    recent = hs.get("recent") if hs else None  # [(finish_rel, won, speed), ...] 新しい順
+    if recent:
+        last3 = recent[:3]
+        recent_finish_rel = sum(t[0] for t in last3) / len(last3)
+        recent_win_rate3 = sum(t[1] for t in last3) / len(last3)
+        best_speed = max(t[2] for t in recent if t[2] is not None) if any(
+            t[2] is not None for t in recent) else None
+        # フォームトレンド: 古い着順相対 − 直近着順相対(正=改善)
+        if len(recent) >= 2:
+            half = max(1, len(recent) // 2)
+            new_avg = sum(t[0] for t in recent[:half]) / half
+            old_avg = sum(t[0] for t in recent[half:]) / max(1, len(recent) - half)
+            form_trend = old_avg - new_avg
+        else:
+            form_trend = 0.0
+    else:
+        recent_finish_rel, recent_win_rate3, best_speed, form_trend = None, None, None, 0.0
     return {
         "kinryo": _f(pre.get("kinryo"), 55.0),
         "horse_weight": _f(pre.get("horse_weight"), 470.0),
@@ -55,6 +74,10 @@ def compute_feat(pre, hs, js, ts, field, race_date):
         "days_since_last": _f(days_since, 60.0),
         "jockey_win_rate": _f(_rate(js, "win"), 0.06),
         "trainer_win_rate": _f(_rate(ts, "win"), 0.06),
+        "recent_finish_rel": _f(recent_finish_rel, 0.6),
+        "recent_win_rate3": _f(recent_win_rate3, 0.08),
+        "best_speed": _f(best_speed, 16.0),
+        "form_trend": _f(form_trend, 0.0),
     }
 
 
@@ -147,7 +170,8 @@ def _update_stats(ents, horse_stats, jockey_stats, trainer_stats, rc, dist):
         if hid is not None:
             hs = horse_stats.setdefault(
                 hid, {"n": 0, "win": 0, "place": 0, "fin_sum": 0.0,
-                      "last_date": None, "best_agari": None, "speed_sum": 0.0})
+                      "last_date": None, "best_agari": None, "speed_sum": 0.0,
+                      "recent": []})
             hs["n"] += 1
             if pos == 1:
                 hs["win"] += 1
@@ -158,8 +182,14 @@ def _update_stats(ents, horse_stats, jockey_stats, trainer_stats, rc, dist):
             if e["agari3f"] is not None:
                 hs["best_agari"] = e["agari3f"] if hs["best_agari"] is None \
                     else min(hs["best_agari"], e["agari3f"])
-            if e["finish_time_sec"] and dist:
-                hs["speed_sum"] += dist / e["finish_time_sec"]  # m/s 相当
+            speed = (dist / e["finish_time_sec"]) if (e["finish_time_sec"] and dist) else None
+            if speed is not None:
+                hs["speed_sum"] += speed  # m/s 相当
+            # 近走履歴(新しい順、最大6走): (着順相対, 勝ち, スピード)
+            field = len(ents)
+            fin_rel = (pos / field) if pos is not None else 1.0
+            hs["recent"].insert(0, (fin_rel, 1 if pos == 1 else 0, speed))
+            del hs["recent"][6:]
         for stats, key in ((jockey_stats, e["jockey"]), (trainer_stats, e["trainer"])):
             if key is None:
                 continue
