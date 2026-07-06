@@ -98,6 +98,32 @@ def parse_entry_features(row):
     return f
 
 
+def parse_corner_positions(html):
+    """コーナー通過順位テーブルから、各馬の「最終コーナー通過位置」を正規化して返す。
+
+    返り値: {horse_num: 0.0..1.0}（0=先頭/逃げ、1=最後方/追込）。脚質の素データ。
+    直線競走(コーナー無し)や取得不可なら {}。当該レースの位置は結果由来なので、
+    特徴量では「過去走の平均通過位置」としてのみ使う(features 側でリーク防止)。
+    """
+    tm = re.search(r'summary="コーナー通過順位"[^>]*>([\s\S]*?)</table>', html)
+    if not tm:
+        return {}
+    # 最後にデータのあるコーナー行(通常4角、無ければ3角)の td を採用
+    last_cell = None
+    for rm in re.finditer(r"<tr>([\s\S]*?)</tr>", tm.group(1)):
+        cm = re.search(r"<td>([\s\S]*?)</td>", rm.group(1))
+        if cm and re.search(r"\d", cm.group(1)):
+            last_cell = cm.group(1)
+    if not last_cell:
+        return {}
+    # 左→右が前→後。馬番を出現順に取り出して順位付け(同枠 () は左右順で近似)
+    seq = [int(n) for n in re.findall(r"\d+", _strip_tags(last_cell))]
+    if len(seq) < 2:
+        return {}
+    field = len(seq)
+    return {num: i / (field - 1) for i, num in enumerate(seq)}
+
+
 class ResultNotAvailable(Exception):
     """結果テーブルがまだ無い(未実施・中止など)。"""
 
@@ -262,5 +288,8 @@ def parse_result_page(html):
     meta = parse_race_meta(html)
     if meta["n_horses"] is None:
         meta["n_horses"] = len(entries)
+    corner = parse_corner_positions(html)
+    for e in entries:
+        e["corner_pos"] = corner.get(e["horse_num"])
     payouts, warnings = parse_payout_table(html)
     return meta, entries, payouts, warnings

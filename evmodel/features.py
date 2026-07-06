@@ -20,6 +20,8 @@ FEAT_NAMES = [
     "jockey_win_rate", "trainer_win_rate",
     # 近走リカレンシー(第2ラウンドで追加): 直近の勢い・状態・トレンド
     "recent_finish_rel", "recent_win_rate3", "best_speed", "form_trend",
+    # 脚質(Option B): 過去走の平均コーナー通過位置 0=先行/1=追込
+    "avg_corner_pos",
 ]
 
 
@@ -78,6 +80,8 @@ def compute_feat(pre, hs, js, ts, field, race_date):
         "recent_win_rate3": _f(recent_win_rate3, 0.08),
         "best_speed": _f(best_speed, 16.0),
         "form_trend": _f(form_trend, 0.0),
+        "avg_corner_pos": _f(
+            (hs["corner_sum"] / hs["corner_n"]) if hs and hs.get("corner_n") else None, 0.5),
     }
 
 
@@ -93,7 +97,7 @@ def load_races(db_path, limit_year=None, return_stats=False):
         "SELECT r.race_id, r.kaisai_date, r.distance, r.n_horses, "
         "       e.horse_num, e.horse_name, e.horse_id, e.finish_pos, e.finish_status, "
         "       e.win_odds, e.kinryo, e.horse_weight, e.weight_diff, e.age, e.sex, "
-        "       e.jockey, e.trainer, e.agari3f, e.finish_time_sec "
+        "       e.jockey, e.trainer, e.agari3f, e.finish_time_sec, e.corner_pos "
         "FROM races r JOIN entries e ON e.race_id = r.race_id "
         "WHERE r.status_result = 1 "
     )
@@ -171,7 +175,7 @@ def _update_stats(ents, horse_stats, jockey_stats, trainer_stats, rc, dist):
             hs = horse_stats.setdefault(
                 hid, {"n": 0, "win": 0, "place": 0, "fin_sum": 0.0,
                       "last_date": None, "best_agari": None, "speed_sum": 0.0,
-                      "recent": []})
+                      "recent": [], "corner_sum": 0.0, "corner_n": 0})
             hs["n"] += 1
             if pos == 1:
                 hs["win"] += 1
@@ -185,6 +189,9 @@ def _update_stats(ents, horse_stats, jockey_stats, trainer_stats, rc, dist):
             speed = (dist / e["finish_time_sec"]) if (e["finish_time_sec"] and dist) else None
             if speed is not None:
                 hs["speed_sum"] += speed  # m/s 相当
+            if e["corner_pos"] is not None:
+                hs["corner_sum"] += e["corner_pos"]
+                hs["corner_n"] += 1
             # 近走履歴(新しい順、最大6走): (着順相対, 勝ち, スピード)
             field = len(ents)
             fin_rel = (pos / field) if pos is not None else 1.0

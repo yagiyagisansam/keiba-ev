@@ -9,7 +9,7 @@ import sqlite3
 import zlib
 from datetime import datetime, timezone
 
-SCHEMA_VERSION = "2"
+SCHEMA_VERSION = "3"
 
 # v2 で entries に追加した、市場オッズに依存しないファンダメンタル特徴量。
 # 既存 v1 DB は open_db() が ALTER TABLE で加算マイグレーションする(データは保持)。
@@ -18,6 +18,7 @@ ENTRY_FEATURE_COLUMNS = [
     ("kinryo", "REAL"), ("horse_weight", "INTEGER"), ("weight_diff", "INTEGER"),
     ("jockey", "TEXT"), ("trainer", "TEXT"), ("affiliation", "TEXT"),
     ("finish_time_sec", "REAL"), ("agari3f", "REAL"),
+    ("corner_pos", "REAL"),  # 最終コーナー通過位置 0..1(脚質)。過去走のみ特徴量化
 ]
 
 DDL = """
@@ -78,6 +79,7 @@ CREATE TABLE IF NOT EXISTS entries (
   affiliation    TEXT,
   finish_time_sec REAL,
   agari3f        REAL,
+  corner_pos     REAL,
   PRIMARY KEY (race_id, horse_num)
 );
 
@@ -224,8 +226,9 @@ def update_race_result(conn, race_id, meta, entries, payouts, status):
             """INSERT INTO entries (race_id, horse_num, waku, horse_name,
                                     finish_pos, finish_status,
                                     horse_id, sex, age, kinryo, horse_weight, weight_diff,
-                                    jockey, trainer, affiliation, finish_time_sec, agari3f)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                    jockey, trainer, affiliation, finish_time_sec, agari3f,
+                                    corner_pos)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(race_id, horse_num) DO UPDATE SET
                  waku = COALESCE(excluded.waku, waku),
                  horse_name = COALESCE(excluded.horse_name, horse_name),
@@ -241,14 +244,15 @@ def update_race_result(conn, race_id, meta, entries, payouts, status):
                  trainer = COALESCE(excluded.trainer, trainer),
                  affiliation = COALESCE(excluded.affiliation, affiliation),
                  finish_time_sec = COALESCE(excluded.finish_time_sec, finish_time_sec),
-                 agari3f = COALESCE(excluded.agari3f, agari3f)""",
+                 agari3f = COALESCE(excluded.agari3f, agari3f),
+                 corner_pos = COALESCE(excluded.corner_pos, corner_pos)""",
             (
                 race_id, e["horse_num"], e.get("waku"), e.get("horse_name"),
                 e.get("finish_pos"), e.get("finish_status"),
                 e.get("horse_id"), e.get("sex"), e.get("age"), e.get("kinryo"),
                 e.get("horse_weight"), e.get("weight_diff"), e.get("jockey"),
                 e.get("trainer"), e.get("affiliation"), e.get("finish_time_sec"),
-                e.get("agari3f"),
+                e.get("agari3f"), e.get("corner_pos"),
             ),
         )
     for p in payouts:

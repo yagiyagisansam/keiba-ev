@@ -253,7 +253,8 @@ def refresh_feature_targets(conn, where_extra="", params=()):
     q = (
         "SELECT r.race_id, r.kaisai_date, r.status_result, r.status_odds, r.n_horses "
         "FROM races r WHERE r.status_result = 1 " + where_extra + " AND EXISTS ("
-        "  SELECT 1 FROM entries e WHERE e.race_id = r.race_id AND e.horse_id IS NULL"
+        "  SELECT 1 FROM entries e WHERE e.race_id = r.race_id "
+        "    AND (e.horse_id IS NULL OR e.corner_pos IS NULL)"
         ") ORDER BY r.kaisai_date, r.race_id"
     )
     return [dict(r) for r in conn.execute(q, params).fetchall()]
@@ -339,10 +340,11 @@ def main(argv=None):
                          "騎手・血統ID・上がり等)が未取得の行を埋め直す(旧DBへの追加入力)")
     args = ap.parse_args(argv)
 
-    if not (args.year or args.date or args.race_id):
+    if not (args.year or args.date or args.race_id or args.refresh_features):
         ap.error("--year / --date / --race-id のいずれかが必要です")
 
-    year = args.year or int((args.date or args.race_id)[:4])
+    _ref = args.date or args.race_id
+    year = args.year or (int(_ref[:4]) if _ref else None)
     conn = db.open_db(args.db, year=year)
     guard = BlockGuard()
     session = PoliteSession(sleep_sec=args.sleep, guard=guard)  # 列挙用(メインスレッド)
@@ -366,13 +368,8 @@ def main(argv=None):
             targets = refresh_feature_targets(conn, where, params)
             run_targets(conn, targets, workers=max(1, args.workers), sleep_sec=args.sleep,
                         guard=guard, budget=budget, counts=counts, force_result=True)
-            db.set_meta(conn, "last_run_at", db.now_utc())
-            conn.commit()
-            write_progress(conn, progress_path, extra={"last_run_counts": counts,
-                                                       "mode": "refresh-features"})
-            conn.close()
             print(f"[ingest] 特徴量バックフィル終了: {counts}")
-            return exit_code
+            return exit_code  # 後始末(set_meta/write_progress/close)は finally が行う
 
         # 1) 開催日・レース列挙
         if args.race_id:
