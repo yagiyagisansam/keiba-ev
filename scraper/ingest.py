@@ -340,10 +340,11 @@ def main(argv=None):
                          "騎手・血統ID・上がり等)が未取得の行を埋め直す(旧DBへの追加入力)")
     args = ap.parse_args(argv)
 
-    if not (args.year or args.date or args.race_id):
+    if not (args.year or args.date or args.race_id or args.refresh_features):
         ap.error("--year / --date / --race-id のいずれかが必要です")
 
-    year = args.year or int((args.date or args.race_id)[:4])
+    _ref = args.date or args.race_id
+    year = args.year or (int(_ref[:4]) if _ref else None)
     conn = db.open_db(args.db, year=year)
     guard = BlockGuard()
     session = PoliteSession(sleep_sec=args.sleep, guard=guard)  # 列挙用(メインスレッド)
