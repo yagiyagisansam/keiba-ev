@@ -368,13 +368,8 @@ def main(argv=None):
             targets = refresh_feature_targets(conn, where, params)
             run_targets(conn, targets, workers=max(1, args.workers), sleep_sec=args.sleep,
                         guard=guard, budget=budget, counts=counts, force_result=True)
-            db.set_meta(conn, "last_run_at", db.now_utc())
-            conn.commit()
-            write_progress(conn, progress_path, extra={"last_run_counts": counts,
-                                                       "mode": "refresh-features"})
-            conn.close()
             print(f"[ingest] 特徴量バックフィル終了: {counts}")
-            return exit_code
+            return exit_code  # 後始末(set_meta/write_progress/close)は finally が行う
 
         # 1) 開催日・レース列挙
         if args.race_id:
