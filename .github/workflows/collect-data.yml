@@ -76,8 +76,14 @@ jobs:
           elif [ -n "$IN_YEAR" ]; then
             echo "years=$IN_YEAR" >> "$GITHUB_OUTPUT"
           else
-            # cron: リポジトリ変数 COLLECT_YEARS (カンマ区切り)。未設定なら現在年
-            echo "years=${COLLECT_YEARS:-$(date +%Y)}" >> "$GITHUB_OUTPUT"
+            # cron: リポジトリ変数 COLLECT_YEARS (カンマ区切り)。
+            # 未設定なら直近10年を自動対象にする(変数設定なしで完全自動化)。
+            if [ -n "$COLLECT_YEARS" ]; then
+              echo "years=$COLLECT_YEARS" >> "$GITHUB_OUTPUT"
+            else
+              Y=$(date +%Y)
+              echo "years=$(seq "$Y" -1 "$((Y-9))" | paste -sd,)" >> "$GITHUB_OUTPUT"
+            fi
           fi
 
       - name: 取得 → 取り込み → 検証 → アップロード
