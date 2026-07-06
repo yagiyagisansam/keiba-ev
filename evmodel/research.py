@@ -11,6 +11,7 @@
 """
 
 import argparse
+import json
 import math
 
 from .condlogit import isotonic_fit, isotonic_apply, null_nll, mcfadden_r2
@@ -126,6 +127,7 @@ def main(argv=None):
     ap.add_argument("--min-train", type=int, default=400)
     ap.add_argument("--folds", type=int, default=4)
     ap.add_argument("--margin", type=float, default=0.05)
+    ap.add_argument("--json", help="結果を JSON で書き出す(CIで蓄積記録用)")
     args = ap.parse_args(argv)
 
     races = load_races(args.db, limit_year=args.year)
@@ -156,6 +158,18 @@ def main(argv=None):
     else:
         print("\n判定: どの方式も EV>1.0 に未達。方式を追加(このファイルに Method 追記)し再実行、"
               "または特徴量拡充/データ増で再挑戦。")
+
+    if args.json:
+        payload = {
+            "schema": "ev2-research/1",
+            "n_races": len(labeled),
+            "min_train": args.min_train, "folds": args.folds, "margin": args.margin,
+            "winner": win,
+            "methods": [{"name": n, **r} for n, r in rows],
+        }
+        with open(args.json, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, separators=(",", ":"))
+        print(f"[research] 結果を {args.json} に記録")
     return 0
 
 
