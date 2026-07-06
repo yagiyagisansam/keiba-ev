@@ -119,6 +119,18 @@ class TestResultPage(unittest.TestCase):
         self.assertEqual(winner["finish_time_sec"], 83.6)  # 1:23.6
         self.assertEqual(winner["agari3f"], 35.4)
 
+    def test_parse_corner_positions(self):
+        from scraper.parse_result import parse_corner_positions
+        cp = parse_corner_positions(load("result_201605021211.html"))
+        self.assertEqual(len(cp), 16)
+        self.assertTrue(all(0.0 <= v <= 1.0 for v in cp.values()))
+        self.assertEqual(min(cp, key=cp.get), 12)   # 4角先頭は馬12
+        self.assertEqual(cp[12], 0.0)
+        self.assertEqual(max(cp, key=cp.get), 15)   # 最後方は馬15
+        # parse_result_page が entries に corner_pos を付けること
+        _, entries, _, _ = parse_result_page(load("result_201605021211.html"))
+        self.assertTrue(all(e.get("corner_pos") is not None for e in entries))
+
 
 class TestShutuba(unittest.TestCase):
     def test_parse_shutuba(self):

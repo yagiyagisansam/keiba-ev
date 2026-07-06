@@ -253,7 +253,8 @@ def refresh_feature_targets(conn, where_extra="", params=()):
     q = (
         "SELECT r.race_id, r.kaisai_date, r.status_result, r.status_odds, r.n_horses "
         "FROM races r WHERE r.status_result = 1 " + where_extra + " AND EXISTS ("
-        "  SELECT 1 FROM entries e WHERE e.race_id = r.race_id AND e.horse_id IS NULL"
+        "  SELECT 1 FROM entries e WHERE e.race_id = r.race_id "
+        "    AND (e.horse_id IS NULL OR e.corner_pos IS NULL)"
         ") ORDER BY r.kaisai_date, r.race_id"
     )
     return [dict(r) for r in conn.execute(q, params).fetchall()]
