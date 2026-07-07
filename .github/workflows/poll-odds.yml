@@ -1,0 +1,78 @@
+# 発走前オッズ収集(late money) ワークフロー
+#
+# 過去レースの途中オッズは取得できないため、開催日にこれから発走するレースの
+# オッズを発走前(60/30/15/10/5/3/1分前)に時系列スナップショット取得して
+# odds_snapshots に貯める(前進収集)。溜まった時系列で late money エッジを検証する。
+#
+# GitHub Release (data-YYYY) の keiba_YYYY.db を永続ストレージに使い、
+# snapshots を追記してアップロードし直す。
+#
+# 注意: GitHub-hosted runner は1ジョブ最長6時間。JRA開催は約6-7時間なので、
+# 午前開始と午後開始の2本で当日をカバーする(スナップショットは冪等=PKで重複無視)。
+name: 発走前オッズ収集(late money)
+
+on:
+  workflow_dispatch:
+    inputs:
+      date:
+        description: '対象開催日 YYYYMMDD (空なら当日JST)'
+        default: ''
+      max_minutes:
+        description: '時間予算(分)'
+        default: '330'
+      offsets:
+        description: '発走前ポーリング分(カンマ区切り)'
+        default: '60,30,15,10,5,3,1'
+  schedule:
+    - cron: '20 0 * * 6,0'   # 土日 JST 09:20 開始(午前〜)
+    - cron: '0 4 * * 6,0'    # 土日 JST 13:00 開始(午後の遅いレース補完)
+
+permissions:
+  contents: write
+
+concurrency:
+  group: poll-odds-${{ inputs.date || 'cron' }}
+  cancel-in-progress: false
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: 依存関係インストール
+        run: pip install -r requirements.txt
+
+      - name: 発走前オッズを時系列収集
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IN_DATE: ${{ inputs.date }}
+          BUDGET: ${{ inputs.max_minutes || '330' }}
+          OFFSETS: ${{ inputs.offsets || '60,30,15,10,5,3,1' }}
+          PROXY_URL: ${{ secrets.PROXY_URL }}
+        run: |
+          set -uo pipefail
+          DATE="${IN_DATE:-$(TZ=Asia/Tokyo date +%Y%m%d)}"
+          Y="${DATE:0:4}"
+          DB="keiba_${Y}.db"; TAG="data-${Y}"
+
+          gh release view "$TAG" >/dev/null 2>&1 \
+            || gh release create "$TAG" --title "Race data $Y" \
+                 --notes "JRA レースデータ(自動収集)。keiba_${Y}.db.gz を展開して利用。"
+          gh release download "$TAG" --pattern "${DB}.gz" --output "${DB}.gz" 2>/dev/null \
+            && gunzip -f "${DB}.gz" || echo "既存 DB なし。新規作成します"
+
+          python -m scraper.poll_odds --db "$DB" --date "$DATE" \
+            --offsets "$OFFSETS" --max-minutes "$BUDGET" --sleep 0.5 || echo "poll exit=$?"
+
+          python -c "import sqlite3;c=sqlite3.connect('$DB'); \
+            n=c.execute('SELECT COUNT(*) FROM odds_snapshots').fetchone()[0]; \
+            print('odds_snapshots total rows:', n); c.close()"
+
+          python -c "import sqlite3; c=sqlite3.connect('$DB'); \
+            c.execute('PRAGMA journal_mode=DELETE'); c.execute('VACUUM'); c.close()"
+          gzip -9 -c "$DB" > "${DB}.gz"
+          gh release upload "$TAG" "${DB}.gz" --clobber
