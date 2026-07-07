@@ -20,11 +20,27 @@ from .condlogit import ConditionalLogit, isotonic_fit, isotonic_apply, mcfadden_
 from .backtest import simulate_win_bets, bootstrap_ci
 
 
+WITH_MARKET = [False]  # True なら市場含意確率 log(q) を特徴に加える(Benter流の融合)
+
+
+def _row(r, i):
+    x = list(r["X"][i])
+    if WITH_MARKET[0]:
+        x.append(math.log(max(r["q"][i], 1e-9)))
+    return x
+
+
 def _race_matrix(races):
-    X = np.array([x for r in races for x in r["X"]], dtype=np.float64)
+    X = np.array([_row(r, i) for r in races for i in range(len(r["X"]))], dtype=np.float64)
     y = np.array([1 if i == r["win"] else 0
                   for r in races for i in range(len(r["X"]))], dtype=np.int32)
     return X, y
+
+
+def _pred_race(clf, r):
+    Xr = np.array([_row(r, i) for i in range(len(r["X"]))], dtype=np.float64)
+    raw = clf.predict_proba(Xr)[:, 1]
+    return raw / raw.sum() if raw.sum() > 0 else np.ones(len(raw)) / len(raw)
 
 
 def _softmax(v):
@@ -42,9 +58,7 @@ def fit_predict_fold(train, test, params):
     pi_per_race = []
     raw_pairs = []  # (rawprob, won) 較正用
     for r in test:
-        Xr = np.array(r["X"], dtype=np.float64)
-        raw = clf.predict_proba(Xr)[:, 1]
-        pi = raw / raw.sum() if raw.sum() > 0 else np.ones(len(raw)) / len(raw)
+        pi = _pred_race(clf, r)
         pi_per_race.append(pi)
         for i, p in enumerate(pi):
             raw_pairs.append((float(p), 1 if i == r["win"] else 0))
@@ -55,9 +69,7 @@ def fit_predict_fold(train, test, params):
     #   train の π も必要 → 別途 train を予測
     s2_races = []
     for r in train:
-        Xr = np.array(r["X"], dtype=np.float64)
-        raw = clf.predict_proba(Xr)[:, 1]
-        pi = raw / raw.sum() if raw.sum() > 0 else np.ones(len(raw)) / len(raw)
+        pi = _pred_race(clf, r)
         pic = np.array([max(isotonic_apply(iso, float(p)), 1e-9) for p in pi])
         pic /= pic.sum()
         X2 = [[math.log(pic[i]), math.log(max(r["q"][i], 1e-9))] for i in range(len(pic))]
@@ -84,9 +96,7 @@ def evaluate(races, params, *, min_train=5000, folds=3, margin=0.05):
             continue
         clf, iso, stage2 = fit_predict_fold(train, test, params)
         for r in test:
-            Xr = np.array(r["X"], dtype=np.float64)
-            raw = clf.predict_proba(Xr)[:, 1]
-            pi = raw / raw.sum() if raw.sum() > 0 else np.ones(len(raw)) / len(raw)
+            pi = _pred_race(clf, r)
             pic = np.array([max(isotonic_apply(iso, float(p)), 1e-9) for p in pi])
             pic /= pic.sum()
             X2 = [[math.log(pic[i]), math.log(max(r["q"][i], 1e-9))] for i in range(len(pic))]
@@ -126,7 +136,9 @@ def main(argv=None):
     ap.add_argument("--leaves", type=int, default=31)
     ap.add_argument("--estimators", type=int, default=300)
     ap.add_argument("--lr", type=float, default=0.05)
+    ap.add_argument("--with-market", action="store_true", help="市場log(q)を特徴に加える")
     args = ap.parse_args(argv)
+    WITH_MARKET[0] = args.with_market
 
     races = load_races(args.db, limit_year=args.year)
     labeled = [r for r in races if r["win"] is not None]
