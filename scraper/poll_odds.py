@@ -98,10 +98,24 @@ def main(argv=None):
                     help="発走前ポーリング分(カンマ区切り)")
     ap.add_argument("--max-minutes", type=float, default=360, help="時間予算(分, 既定6時間)")
     ap.add_argument("--sleep", type=float, default=0.5)
+    ap.add_argument("--count-only", action="store_true",
+                    help="対象日の発走時刻ありレース数だけ出力して終了(開催日判定用)")
     args = ap.parse_args(argv)
 
     date_str = args.date or datetime.now(JST).strftime("%Y%m%d")
     year = int(date_str[:4])
+
+    # 開催日判定(DBを開かず race_list だけ見る。非開催日はここで即終了)
+    if args.count_only:
+        session = PoliteSession(sleep_sec=args.sleep, guard=BlockGuard())
+        try:
+            n = len(fetch_race_times(session, date_str))
+        except Exception as e:  # 取得失敗は0扱い(非開催日とみなす)
+            print(f"[poll] race_list 取得失敗: {e}", file=sys.stderr)
+            n = 0
+        print(f"RACES={n}")
+        return 0
+
     conn = db.open_db(args.db, year=year)
     guard = BlockGuard()
     session = PoliteSession(sleep_sec=args.sleep, guard=guard)
