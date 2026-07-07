@@ -74,3 +74,25 @@ def _race_from_id(race_id, kaisai_date, race_name):
 def fetch_race_list(session, kaisai_date):
     url = config.RACE_LIST_URL.format(date=kaisai_date)
     return parse_race_list(session.get_text(url), kaisai_date)
+
+
+def parse_race_times(html, kaisai_date):
+    """race_list HTML から {race_id: '発走HH:MM'} を返す(late money ポーリング用)。"""
+    sec_m = re.search(
+        rf'data-kaisaidate="{kaisai_date}"[\s\S]+?(?=<div class="RaceListDayWrap"|$)', html
+    )
+    target = sec_m.group(0) if sec_m else html
+    times = {}
+    # Main_Box 単位に分割(切り詰めない: 発走時刻は Race_Data=Item02 にあるため)
+    for box in target.split('<div class="RaceList_Main_Box">')[1:]:
+        rid_m = re.search(
+            r"(?:race_result&(?:amp;)?race_id|shutuba\.html\?race_id)=(\d{12})", box)
+        tm = re.search(r'Race_Data">\s*(\d{1,2}:\d{2})', box)
+        if rid_m and tm and rid_m.group(1) not in times:
+            times[rid_m.group(1)] = tm.group(1)
+    return times
+
+
+def fetch_race_times(session, kaisai_date):
+    url = config.RACE_LIST_URL.format(date=kaisai_date)
+    return parse_race_times(session.get_text(url), kaisai_date)

@@ -100,6 +100,17 @@ CREATE TABLE IF NOT EXISTS odds (
   payload           BLOB    NOT NULL,
   PRIMARY KEY (race_id, bet_type)
 );
+
+-- late money 用: 発走前のオッズを時系列でスナップショット保存
+CREATE TABLE IF NOT EXISTS odds_snapshots (
+  race_id         TEXT    NOT NULL,
+  bet_type        INTEGER NOT NULL,
+  poll_at         TEXT    NOT NULL,   -- 取得時刻(UTC ISO)
+  minutes_to_post INTEGER,            -- 発走までの分(負=発走後)
+  payload         BLOB    NOT NULL,   -- zlib圧縮 {馬番:[オッズ,人気]}
+  PRIMARY KEY (race_id, bet_type, poll_at)
+);
+CREATE INDEX IF NOT EXISTS idx_snap_race ON odds_snapshots(race_id);
 """
 
 # races.status_result / status_odds / kaisai_days.status の値
@@ -274,6 +285,19 @@ def upsert_odds_blob(conn, race_id, bet_type, official_datetime, odds_dict):
            (race_id, bet_type, official_datetime, n_combos, payload)
            VALUES (?, ?, ?, ?, ?)""",
         (race_id, bet_type, official_datetime, len(odds_dict), payload),
+    )
+
+
+def insert_odds_snapshot(conn, race_id, bet_type, poll_at, minutes_to_post, odds_dict):
+    """発走前オッズのスナップショットを1件保存する(late money 収集)。"""
+    payload = zlib.compress(
+        json.dumps(odds_dict, ensure_ascii=False, separators=(",", ":")).encode("utf-8"), 6
+    )
+    conn.execute(
+        """INSERT OR IGNORE INTO odds_snapshots
+           (race_id, bet_type, poll_at, minutes_to_post, payload)
+           VALUES (?, ?, ?, ?, ?)""",
+        (race_id, bet_type, poll_at, minutes_to_post, payload),
     )
 
 
