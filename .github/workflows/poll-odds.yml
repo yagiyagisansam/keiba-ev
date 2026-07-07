@@ -2,13 +2,15 @@
 #
 # 過去レースの途中オッズは取得できないため、開催日にこれから発走するレースの
 # オッズを発走前(60/30/15/10/5/3/1分前)に時系列スナップショット取得して
-# odds_snapshots に貯める(前進収集)。溜まった時系列で late money エッジを検証する。
+# odds_snapshots に貯める(前進収集)。ユーザはレース中スマホを使えない前提で、
+# 完全自動(cron)で回す。
 #
-# GitHub Release (data-YYYY) の keiba_YYYY.db を永続ストレージに使い、
-# snapshots を追記してアップロードし直す。
+# 毎日 cron を回し、まず「開催日判定」で発走時刻のあるレース数を確認。
+# 0(非開催: 平日など)なら即終了(race_list 1回だけの軽い no-op)。
+# >0(土日・祝日開催)なら DB を取得してポーリングし、Release に追記。
+# → 土日だけでなく祝日月曜などの開催も取りこぼさず、電話操作は一切不要。
 #
-# 注意: GitHub-hosted runner は1ジョブ最長6時間。JRA開催は約6-7時間なので、
-# 午前開始と午後開始の2本で当日をカバーする(スナップショットは冪等=PKで重複無視)。
+# 1ジョブ最長6時間のため、午前(JST 09:00)と午後(JST 13:00)の2本で当日をカバー。
 name: 発走前オッズ収集(late money)
 
 on:
@@ -24,14 +26,14 @@ on:
         description: '発走前ポーリング分(カンマ区切り)'
         default: '60,30,15,10,5,3,1'
   schedule:
-    - cron: '20 0 * * 6,0'   # 土日 JST 09:20 開始(午前〜)
-    - cron: '0 4 * * 6,0'    # 土日 JST 13:00 開始(午後の遅いレース補完)
+    - cron: '0 0 * * *'    # 毎日 JST 09:00 開始(午前〜。非開催日は即終了)
+    - cron: '0 4 * * *'    # 毎日 JST 13:00 開始(午後の遅いレース補完)
 
 permissions:
   contents: write
 
 concurrency:
-  group: poll-odds-${{ inputs.date || 'cron' }}
+  group: poll-odds-${{ github.event.schedule || inputs.date || 'manual' }}
   cancel-in-progress: false
 
 jobs:
@@ -46,16 +48,30 @@ jobs:
       - name: 依存関係インストール
         run: pip install -r requirements.txt
 
-      - name: 発走前オッズを時系列収集
+      - name: 開催日判定(発走時刻のあるレース数)
+        id: check
+        env:
+          IN_DATE: ${{ inputs.date }}
+          PROXY_URL: ${{ secrets.PROXY_URL }}
+        run: |
+          DATE="${IN_DATE:-$(TZ=Asia/Tokyo date +%Y%m%d)}"
+          echo "date=$DATE" >> "$GITHUB_OUTPUT"
+          N=$(python -m scraper.poll_odds --db /tmp/nop.db --date "$DATE" \
+                --count-only 2>/dev/null | sed -n 's/^RACES=//p')
+          N="${N:-0}"
+          echo "races=$N" >> "$GITHUB_OUTPUT"
+          echo "対象日 $DATE: $N レース$([ "$N" = 0 ] && echo ' → 非開催、スキップ')"
+
+      - name: 発走前オッズを時系列収集(開催日のみ)
+        if: steps.check.outputs.races != '0'
         env:
           GH_TOKEN: ${{ github.token }}
-          IN_DATE: ${{ inputs.date }}
+          DATE: ${{ steps.check.outputs.date }}
           BUDGET: ${{ inputs.max_minutes || '330' }}
           OFFSETS: ${{ inputs.offsets || '60,30,15,10,5,3,1' }}
           PROXY_URL: ${{ secrets.PROXY_URL }}
         run: |
           set -uo pipefail
-          DATE="${IN_DATE:-$(TZ=Asia/Tokyo date +%Y%m%d)}"
           Y="${DATE:0:4}"
           DB="keiba_${Y}.db"; TAG="data-${Y}"
 
