@@ -1,8 +1,8 @@
 # レースデータ収集ワークフロー
 #
 # - workflow_dispatch: 単日スモークテスト(date)や特定年月の取り込みを手動実行
-# - schedule: 3時間ごと、COLLECT_YEARS(リポジトリ変数, 例 "2026,2025")の
-#   未収集レースを時間予算内で自動バックフィル(concurrency で連続実行=約4倍速)
+# - schedule: **2026-09-06 に停止**(自動収集は行わない)。収集が必要なときは
+#   workflow_dispatch で年・月・日を指定して手動実行する
 #
 # 所要時間の目安(workers=4, sleep=0.5): 1レース≈1.8秒 → 1年≈2時間。
 # 年別の手動dispatchは並列実行できる(concurrency group が対象別)が、
@@ -33,11 +33,12 @@ on:
       sleep:
         description: 'ワーカー毎のリクエスト間ウェイト秒'
         default: '0.5'
-  schedule:
-    # 3時間ごと。1回の処理(約2.5時間)より間隔が長いので concurrency により
-    # 実行が途切れず連続的に回り、1日あたり実質20時間前後を収集(旧2回/日の約4倍速)。
-    # 追いつけば「未収集なし」で即終了するので無駄撃ちにならない。
-    - cron: '0 */3 * * *'
+  # 自動収集(cron)は 2026-09-06 に停止した。
+  # 理由: 対象年(COLLECT_YEARS)の未収集レースが 0 件になり収集自体は完了済みで、
+  #       3時間ごとの実行は「Release タグ不正(HTTP 422)」で失敗し続けるだけだったため。
+  # 再開するときは下の2行のコメントを外す(必要なら間隔も見直す):
+  # schedule:
+  #   - cron: '0 */3 * * *'
 
 permissions:
   contents: write   # Release の作成・アップロードに必要
@@ -100,7 +101,8 @@ jobs:
           FINAL_EXIT=0
           IFS=',' read -ra YEARS <<< "${{ steps.plan.outputs.years }}"
           for Y in "${YEARS[@]}"; do
-            Y="$(echo "$Y" | tr -d ' ')"
+            Y="$(echo "$Y" | tr -d '[:space:]')"
+            [ -z "$Y" ] && continue
             DB="keiba_${Y}.db"
             TAG="data-${Y}"
             echo "::group::${Y}年"
