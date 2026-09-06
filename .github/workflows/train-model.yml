@@ -28,8 +28,12 @@ on:
       refresh_features:
         description: '結果ページ再取得で特徴量を埋める (true/false)'
         default: 'false'
-  schedule:
-    - cron: '0 20 * * 5'   # 毎週金曜 JST 05:00: 週末開催に備えてモデル更新
+  # 自動学習(cron)は 2026-09-06 に停止した。
+  # 理由: 検証(研究ループ)で全方式が EV>1.0 に届かず(ROI 0.42〜0.67, winner=null)、
+  #       毎週モデルを更新し続ける意味が無くなったため。手動実行は引き続き可能。
+  # 再開するときは下の2行のコメントを外す:
+  # schedule:
+  #   - cron: '0 20 * * 5'   # 毎週金曜 JST 05:00: 週末開催に備えてモデル更新
 
 permissions:
   contents: write
